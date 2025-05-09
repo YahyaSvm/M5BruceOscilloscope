@@ -1,6 +1,6 @@
 # M5BruceOsiloskop - v1.0
 
-**Geliştirici:** YahyaSvm
+**Geliştirici:** YahyaSvm , takagi-1
 **Hedef Firmware:** [Bruce Firmware by pr3y](https://github.com/pr3y/Bruce)
 **Sürüm:** 1.0 (Yayın Tarihi: 5.9.2025)
 **Diller:** [English](./README.md) | [Türkçe](./README_tr.md)
