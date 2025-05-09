@@ -1,6 +1,6 @@
 var SCREEN_WIDTH = width();
 var SCREEN_HEIGHT = height();
-var APP_VERSION = "v1.1";
+var APP_VERSION = "v1.2"; // Increment version
 
 var ADC_REF_VOLTAGE = 3.3;
 var ADC_MAX_VALUE = 4095; // Assuming 12-bit ADC
@@ -21,20 +21,21 @@ var BTN_NAV_DOWN_PIN = 39;     // Typically M5's Button C
 var CH1_PIN = 32;
 var CH2_PIN = 33;
 
-// === USB VBUS Reading Configuration ===
-// Set this to 'false' if your M5Stack's USB voltage reading is noisy or unreliable (e.g., fluctuates when charging).
-// Setting to 'false' disables this feature entirely.
-var ENABLE_USB_VOLTAGE_READING = true;
-
-// PRIORITY 1: Bruce Firmware's own global function to get VBUS voltage.
-//             Example: if Bruce defines `function getVBUSVoltage() { return 5.01; }`
-//             This script will try to call `getVBUSVoltage()`.
-// PRIORITY 2: If no global getVBUSVoltage() is found, use ADC pin method below.
-var VBUS_ADC_PIN = -1; // SET THIS if using ADC method. Example: 36 on some ESP32 boards.
-                       // REQUIRES A VOLTAGE DIVIDER from USB 5V to this ADC pin.
-                       // The ADC input voltage must NOT exceed ADC_REF_VOLTAGE.
-var VBUS_VOLTAGE_DIVIDER_RATIO = 2.0; // (R_to_VBUS + R_to_GND) / R_to_GND. Example: 10k + 10k = 20k, Ratio = 2.0
-var VBUS_CALIBRATION_FACTOR = 1.0; // Adjust this factor to calibrate the reading if needed (e.g., 1.02 for a 2% adjustment)
+// === USB/Charging Detection Heuristic ===
+// This code tries to detect if the device might be connected to USB power,
+// as this can interfere with sensitive analog measurements on some M5Stack models.
+// IT DOES NOT DIRECTLY DETECT CHARGING OR VBUS PRESENCE RELIABLY ON ALL HARDWARE.
+// It works by checking if a disconnected ADC pin (CH1_PIN) reads a high value,
+// which might happen due to charging circuitry interaction when no probe is attached.
+// If detected, it warns the user and prevents entering the oscilloscope screen.
+// Adjust USB_DETECT_THRESHOLD_ADC if needed for your specific hardware.
+var ENABLE_USB_DETECTION = true; // Set to 'false' to disable this check entirely
+var USB_DETECT_PIN = CH1_PIN; // The pin to check for high voltage (e.g., CH1 or CH2 pin)
+// Threshold for detection: ADC value must be consistently ABOVE this to trigger warning.
+// ADC_MAX_VALUE * 0.8 means > ~2.64V for a 3.3V reference.
+var USB_DETECT_THRESHOLD_ADC = ADC_MAX_VALUE * 0.8;
+var USB_DETECT_READ_COUNT = 10; // Number of readings to average/check
+var USB_DETECT_READ_DELAY = 5; // Delay in ms between detection readings
 
 // === UI Element Dimensions & Colors ===
 var HEADER_HEIGHT = 18; var FOOTER_HEIGHT = 18; var INFO_BAR_HEIGHT = 15;
@@ -61,41 +62,27 @@ var measureChannel = 1; // Channel used for Vpp and Freq measurements (1 or 2)
 var triggerLevelAdc = ADC_MAX_VALUE/2; // ADC value for trigger level (approx 1.65V for 3.3V ref)
 var triggerEdge = 1; // 1 for rising, 0 for falling
 
-var showUsbVoltageOnScope = true; // Setting within the scope view to show/hide USB voltage
+// Removed showUsbVoltageOnScope as USB reading is removed
 
-// === Helper Function to Read VBUS Voltage ===
-// Reads the USB VBUS voltage using the configured method.
-// Returns voltage as float, -1 if feature disabled/not configured, -2 if error during read.
-function readVbusVoltage() {
-    if (!ENABLE_USB_VOLTAGE_READING) return -1; // Feature globally disabled
-
-    try {
-        // PRIORITY 1: Check for a globally defined getVBUSVoltage function in Bruce
-        if (typeof getVBUSVoltage === 'function') {
-            var vbus = getVBUSVoltage();
-            // Ensure it's a number and apply calibration if needed (though direct func might not need it)
-            if (typeof vbus === 'number' && !isNaN(vbus)) {
-                return vbus * VBUS_CALIBRATION_FACTOR; // Apply calibration even to direct func result
-            } else {
-                // print("getVBUSVoltage did not return a number."); // For Bruce console debugging
-                return -2; // Error: Bruce function returned unexpected type or NaN
-            }
-        }
-        // PRIORITY 2: Fallback to user-defined ADC pin if configured and analogRead is available
-        else if (VBUS_ADC_PIN >= 0 && typeof analogRead === 'function') {
-            var adcVal = analogRead(VBUS_ADC_PIN);
-            if (adcVal === null || isNaN(adcVal)) return -2; // analogRead failed
-
-            var vbusAdc = (adcVal / ADC_MAX_VALUE) * ADC_REF_VOLTAGE * VBUS_VOLTAGE_DIVIDER_RATIO * VBUS_CALIBRATION_FACTOR;
-            return vbusAdc;
-        } else {
-            // print("USB VBUS reading configured but no method available (getVBUSVoltage function missing or VBUS_ADC_PIN < 0 or analogRead missing)."); // Debug
-             return -1; // Neither method available or VBUS_ADC_PIN not set correctly
-        }
-    } catch (e) {
-        // print("Error in readVbusVoltage: " + e); // For Bruce console debugging
-        return -2; // General error condition
+// === Helper Function for USB/Charging Detection (Heuristic) ===
+// Returns true if USB/Charging is likely detected based on ADC pin state.
+// THIS IS A HEURISTIC AND MAY NOT BE RELIABLE ON ALL HARDWARE.
+function isUsbChargingDetected() {
+    if (!ENABLE_USB_DETECTION || USB_DETECT_PIN < 0 || typeof analogRead !== 'function') {
+        return false; // Detection disabled or not configured/possible
     }
+
+    var highCount = 0;
+    for (var i = 0; i < USB_DETECT_READ_COUNT; i++) {
+        var adcVal = analogRead(USB_DETECT_PIN);
+        if (adcVal !== null && !isNaN(adcVal) && adcVal > USB_DETECT_THRESHOLD_ADC) {
+            highCount++;
+        }
+        delay(USB_DETECT_READ_DELAY);
+    }
+
+    // Consider it detected if a majority of readings were high
+    return highCount > (USB_DETECT_READ_COUNT / 2);
 }
 
 // === UI Helper Functions ===
@@ -144,6 +131,43 @@ function drawScrollableMenuItem(text, index, selectedIndex, viewTopIndex, yOffse
     }
 }
 
+// === USB Warning Screen ===
+function showUsbWarningAndBlock() {
+    drawFillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_BACKGROUND);
+    drawHeader("WARNING");
+    setTextSize(1);
+    setTextColor(COLOR_WARNING_TEXT);
+
+    var warnings = [
+        "USB/Charging detected.",
+        "Disconnect USB power",
+        "before using the",
+        "oscilloscope.",
+        "",
+        "USB power can cause",
+        "noisy measurements.",
+        "DISCONNECT USB CABLE!"
+    ];
+
+    var yPos = HEADER_HEIGHT + 10;
+    var lineHeight = 12;
+    for (var i = 0; i < warnings.length; i++) {
+        var line = warnings[i];
+        var lineWidth = line.length * CHAR_WIDTH_PX;
+        drawString(line, Math.floor(SCREEN_WIDTH / 2 - lineWidth / 2), yPos + i * lineHeight);
+    }
+
+    drawFooter("", "Press Any Button", ""); // Hint to exit
+
+    // Wait for any button press to return to the menu
+    while (digitalRead(BTN_M5_SELECT_EXIT_PIN) && digitalRead(BTN_NAV_UP_PIN) && digitalRead(BTN_NAV_DOWN_PIN)) {
+        delay(50);
+    }
+    delay(200); // Debounce
+     drawFillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_BACKGROUND); // Clear screen after button press
+}
+
+
 // === Settings Menu ===
 function settingsMenu() {
   var selectedIndex = 0; var viewTopIndex = 0;
@@ -155,13 +179,9 @@ function settingsMenu() {
     { name: "V/Div", getVal: function(){return voltsPerDivValues[voltsPerDivIndex].toFixed(1)+"V";}, action: function(){voltsPerDivIndex=(voltsPerDivIndex+1)%voltsPerDivValues.length; voltsPerDiv=voltsPerDivValues[voltsPerDivIndex];}},
     { name: "CH1", getVal: function(){return activeChannel1?"On":"Off";}, action: function(){activeChannel1=!activeChannel1;}},
     { name: "CH2", getVal: function(){return activeChannel2?"On":"Off";}, action: function(){activeChannel2=!activeChannel2;}},
-    { name: "Meas.Ch", getVal: function(){return "CH"+measureChannel;}, action: function(){measureChannel=(measureChannel%2)+1;}},
+    { name: "Meas.Ch", getVal: function(){return "CH"+measureChannel;}, action: function(){measureChannel=(measureChannel%2)+1; if(!activeChannel1 && !activeChannel2) measureChannel=1;}}, // Prevent selecting a channel that's off unless both are off
     { name: "TrigEdge", getVal: function(){return triggerEdge==1?"Rise":"Fall";}, action: function(){triggerEdge=1-triggerEdge;}}, // Simple toggle for edge
-    { name: "USB V Read", getVal: function(){return showUsbVoltageOnScope?"On":"Off";}, action: function(){showUsbVoltageOnScope=!showUsbVoltageOnScope;}},
-    // USB Calibration option - uncomment if you need to calibrate the ADC reading method
-    // Requires ENABLE_USB_VOLTAGE_READING = true and VBUS_ADC_PIN >= 0
-    // { name: "USB Calib.", getVal: function(){return VBUS_CALIBRATION_FACTOR.toFixed(2);},
-    //   action: function(){ VBUS_CALIBRATION_FACTOR += 0.01; if(VBUS_CALIBRATION_FACTOR > 1.5) VBUS_CALIBRATION_FACTOR = 0.8; VBUS_CALIBRATION_FACTOR = parseFloat(VBUS_CALIBRATION_FACTOR.toFixed(2)); }},
+    // Removed USB V Read setting
     { name: "Back", getVal: function(){return "";}, action: "EXIT_MENU" }
   ];
 
@@ -194,6 +214,18 @@ function settingsMenu() {
       if (currentItem.action === "EXIT_MENU") { delay(200); return; } // Exit this function
       else if (typeof currentItem.action === 'function') {
           currentItem.action(); // Perform the menu item's action
+          // After action, adjust selected measurement channel if needed
+          if ((currentItem.name === "CH1" || currentItem.name === "CH2") && measureChannel === 1 && !activeChannel1 && activeChannel2) {
+             // If CH1 was just turned off and CH2 is on, and measurement was on CH1, switch measurement to CH2
+             measureChannel = 2;
+          } else if ((currentItem.name === "CH1" || currentItem.name === "CH2") && measureChannel === 2 && !activeChannel2 && activeChannel1) {
+             // If CH2 was just turned off and CH1 is on, and measurement was on CH2, switch measurement to CH1
+             measureChannel = 1;
+          } else if (!activeChannel1 && !activeChannel2) {
+             // If both are off, default measurement back to 1 (though it measures initialAdcValue)
+             measureChannel = 1;
+          }
+
           redrawScreen = true; // Action might change displayed value, force redraw
       }
       delay(200); // Debounce
@@ -367,9 +399,7 @@ function oscilloscopeScreen() {
   var readyForNextTrigger = true; // Flag to indicate if the scope is waiting for a new trigger event
   var triggeredThisSweep = false; // Flag to indicate if a trigger occurred during the current sweep
 
-  // Variables for USB voltage display
-  var lastVbusReadTime = 0; // Time in seconds of the last USB voltage reading
-  var displayedVbus = -1; // -1: Not read/disabled, -2: Error, >=0: Value
+  // Removed USB voltage display variables
 
   // Helper to convert ADC value to screen Y coordinate
   function adcToScreenY(adcValue){
@@ -413,7 +443,7 @@ function oscilloscopeScreen() {
     }
   }
 
-  // Helper to draw the info bar (V/Div, Time/Div, Vpp, Freq, USB V)
+  // Helper to draw the info bar (V/Div, Time/Div, Vpp, Freq)
   function printScopeInfo(){
     drawFillRect(0,HEADER_HEIGHT,SCREEN_WIDTH,INFO_BAR_HEIGHT,color(15,15,15)); // Clear info bar area
     setTextSize(1); setTextColor(COLOR_FOREGROUND);
@@ -425,7 +455,6 @@ function oscilloscopeScreen() {
 
     // Format strings
     var vdivStr = voltsPerDiv.toFixed(1) + "V";
-    var tdivPerDivValue = (graphRenderWidth / NUM_HORZ_DIVS) * (timeBase / (graphRenderWidth / NUM_HORZ_DIVS)); // This simplifies to timeBase per horizontal division
     // Adjust format based on value (ms or s)
     var tdivStrText = (timeBase < 1000) ? timeBase.toFixed(0)+"ms" : (timeBase/1000.0).toFixed(1)+"s";
 
@@ -433,31 +462,19 @@ function oscilloscopeScreen() {
     // Format frequency (show --- if very low or very high/unstable)
     var hzStr = (measuredFreq > 0.1 && measuredFreq < 20000 ? measuredFreq.toFixed(0) : "---") + "Hz";
 
-    // Prepare USB voltage string if enabled
-    var usbStrText = "";
-    if (showUsbVoltageOnScope && ENABLE_USB_VOLTAGE_READING) { // Only show if feature enabled and setting is on
-        if (displayedVbus >= 0) usbStrText = "USB:" + displayedVbus.toFixed(2) + "V";
-        else if (displayedVbus === -2) usbStrText = "USB:ERR"; // Error during read
-        else if (displayedVbus === -1) usbStrText = "USB:N/A"; // Feature disabled/not configured (shouldn't happen if ENABLE_USB_VOLTAGE_READING is true but no method works)
-    }
-
     // Draw V/Div (left aligned)
     drawString(vdivStr, 3, infoY);
 
-    // Draw USB Voltage OR Time/Div (right aligned, USB takes priority if enabled)
-    if (usbStrText) {
-        var usbStrWidth = usbStrText.length * CHAR_WIDTH_PX;
-        drawString(usbStrText, SCREEN_WIDTH - usbStrWidth - 3, infoY);
-    } else {
-        var tdivWidth = tdivStrText.length * CHAR_WIDTH_PX;
-        drawString(tdivStrText, SCREEN_WIDTH - tdivWidth - 3, infoY);
-    }
+    // Draw Time/Div (right aligned)
+    var tdivWidth = tdivStrText.length * CHAR_WIDTH_PX;
+    drawString(tdivStrText, SCREEN_WIDTH - tdivWidth - 3, infoY);
+
 
     // Draw Vpp and Freq (centered if space allows)
     var vppWidth = vppStr.length * CHAR_WIDTH_PX;
     var hzWidth = hzStr.length * CHAR_WIDTH_PX;
     var leftTaken = (vdivStr.length * CHAR_WIDTH_PX + 5);
-    var rightTaken = (usbStrText ? (usbStrText.length * CHAR_WIDTH_PX + 5) : (tdivStrText.length * CHAR_WIDTH_PX + 5) );
+    var rightTaken = (tdivStrText.length * CHAR_WIDTH_PX + 5) ;
     var availableMidSpace = SCREEN_WIDTH - leftTaken - rightTaken;
 
     // Check if both Vpp and Freq fit comfortably
@@ -490,45 +507,25 @@ function oscilloscopeScreen() {
     // Check Exit Button
     if (!digitalRead(BTN_M5_SELECT_EXIT_PIN)) { delay(200); return; }
 
-    // --- Read and Display USB Voltage Periodically ---
-    // Attempt to get current time if getTime function is available in Bruce
-    var currentTime = -1;
-    try { if (typeof getTime === 'function') currentTime = getTime(); } catch(e) { currentTime = -1;}
+    // --- Read ADC Channels ---
+    var adcValCh1 = analogRead(CH1_PIN);
+    // If CH2 is off, its ADC reading is not used, but we set a default for plotting purposes
+    var adcValCh2 = activeChannel2 ? analogRead(CH2_PIN) : initialAdcValue;
 
-    // Read VBUS voltage if enabled and enough time has passed (or first read)
-    if (ENABLE_USB_VOLTAGE_READING && showUsbVoltageOnScope) {
-        if (currentTime !== -1) { // If time is available, use interval
-            if (currentTime - lastVbusReadTime > 1.0 || lastVbusReadTime === 0 ) { // Read approx once per second
-                displayedVbus = readVbusVoltage();
-                lastVbusReadTime = currentTime;
-                 // Redraw info bar as USB voltage might change
-                printScopeInfo();
-            }
-        } else { // If time is not available (getTime missing), try reading once
-             if (lastVbusReadTime === 0){ // Only try reading once
-                displayedVbus = readVbusVoltage();
-                lastVbusReadTime = 1; // Mark as read
-                 // Redraw info bar
-                printScopeInfo();
-             }
-             // Note: Without getTime, USB voltage reading won't update periodically.
-             // It will only show the value from the first read attempt.
-        }
-    } else if (displayedVbus !== -1 || showUsbVoltageOnScope) {
-        // If feature was just disabled or showUsbVoltageOnScope turned off,
-        // update the info bar to reflect that.
-        displayedVbus = -1; // Indicate disabled/not shown
-        printScopeInfo();
+    // Check if analogRead returned valid numbers before proceeding
+    if (adcValCh1 === null || isNaN(adcValCh1) || (activeChannel2 && (adcValCh2 === null || isNaN(adcValCh2)))) {
+        // Handle ADC read error - maybe display an error message or skip this frame
+        // For now, just skip this frame to prevent errors
+        print("ADC read failed!"); // For Bruce console debugging
+        delay(timeBase); // Wait for the frame duration
+        continue; // Skip the rest of the loop iteration
     }
 
 
-    // --- Read ADC Channels ---
-    var adcValCh1 = analogRead(CH1_PIN);
-    var adcValCh2 = activeChannel2 ? analogRead(CH2_PIN) : initialAdcValue; // If CH2 off, use center line for its plot
-
     // Convert ADC values to screen coordinates
     var screenYCh1 = adcToScreenY(adcValCh1);
-    var screenYCh2 = activeChannel2 ? adcToScreenY(adcValCh2) : adcToScreenY(initialAdcValue); // If CH2 off, plot stays at center
+    // If CH2 is off, its plot stays at the center line
+    var screenYCh2 = activeChannel2 ? adcToScreenY(adcValCh2) : adcToScreenY(initialAdcValue);
 
     // --- Drawing Logic ---
     // If we've reached the end of the screen, start a new sweep
@@ -562,40 +559,45 @@ function oscilloscopeScreen() {
     prevY2 = screenYCh2;
 
     // --- Measurement (Vpp) ---
-    // Use the ADC value of the selected measurement channel
-    // Default to CH1 if measureChannel is invalid or the selected channel is off
-    var adcValueForMeasurement = adcValCh1; // Default to CH1
-    if (measureChannel === 2 && activeChannel2) {
-        adcValueForMeasurement = adcValCh2;
-    } else if (measureChannel === 1 && !activeChannel1 && activeChannel2) {
-         // If CH1 is off but CH2 is on and CH1 is selected for measurement,
-         // this is a weird state, maybe default to CH2? Or just measure nothing?
-         // Let's measure CH2 if it's active, regardless of measureChannel setting,
-         // if the initially selected measureChannel is off. Simpler.
-         if (activeChannel2) adcValueForMeasurement = adcValCh2;
-         else adcValueForMeasurement = initialAdcValue; // If both off, measure center
-    } else if (!activeChannel1 && !activeChannel2) {
-         adcValueForMeasurement = initialAdcValue; // Both off, measure center
+    // Determine the ADC value to use for Vpp/Freq measurement.
+    // Prefer the selected measureChannel if it's active.
+    // Fallback to the *first active channel* if the selected measureChannel is off.
+    // If both are off, measure the initial center value (will result in 0 Vpp).
+    var adcValueForMeasurement = initialAdcValue; // Default if both off
+    if (measureChannel === 1 && activeChannel1) {
+         adcValueForMeasurement = adcValCh1;
+    } else if (measureChannel === 2 && activeChannel2) {
+         adcValueForMeasurement = adcValCh2;
+    } else if (activeChannel1) { // Selected channel is off, but CH1 is on
+         adcValueForMeasurement = adcValCh1;
+         measureChannel = 1; // Auto-switch measure channel? Maybe not, keep user setting. Just measure CH1.
+    } else if (activeChannel2) { // Selected channel is off, but CH2 is on
+         adcValueForMeasurement = adcValCh2;
+         measureChannel = 2; // Auto-switch measure channel? Just measure CH2.
     }
+    // Note: The setting in the menu will still show the user's choice,
+    // but the measurement here uses an active channel if the chosen one is off.
+    // This is a pragmatic approach. The menu setting might need a visual indicator
+    // if the selected channel is off, but that's more complex UI.
 
-
-    // Update min/max ADC values for Vpp calculation if the relevant channel is active
-    if ((measureChannel === 1 && activeChannel1) || (measureChannel === 2 && activeChannel2)) {
-        if (adcValueForMeasurement > maxAdcValue) maxAdcValue = adcValueForMeasurement;
-        if (adcValueForMeasurement < minAdcValue) minAdcValue = adcValueForMeasurement;
+    // Update min/max ADC values for Vpp calculation *only if at least one channel is active*
+    if (activeChannel1 || activeChannel2) {
+         if (adcValueForMeasurement > maxAdcValue) maxAdcValue = adcValueForMeasurement;
+         if (adcValueForMeasurement < minAdcValue) minAdcValue = adcValueForMeasurement;
     } else {
-         // If the selected measurement channel is off, reset min/max to indicate no valid measurement
+         // If both channels are off, reset min/max to indicate no valid measurement
          minAdcValue = ADC_MAX_VALUE;
          maxAdcValue = 0;
     }
 
 
     // --- Simple Edge Triggering and Frequency Counting ---
-    // Determine the ADC source for triggering
-    var triggerSourceAdc = initialAdcValue; // Default to center if both channels off
+    // Determine the ADC source for triggering.
+    // Default to CH1 if active, then CH2 if CH1 is off and CH2 is active.
+    // If both off, triggering is effectively disabled (always triggers or never triggers depending on level).
+    var triggerSourceAdc = initialAdcValue; // Default if both channels off
     if (activeChannel1) triggerSourceAdc = adcValCh1;
-    else if (activeChannel2) triggerSourceAdc = adcValCh2; // Use CH2 if CH1 off and CH2 on
-    // If both off, triggerSourceAdc remains initialAdcValue, effectively triggering immediately or not at all depending on triggerLevelAdc
+    else if (activeChannel2) triggerSourceAdc = adcValCh2;
 
     var currentTriggerLevel = triggerLevelAdc; // Get current trigger level (fixed for now)
 
@@ -616,13 +618,11 @@ function oscilloscopeScreen() {
         }
 
         // If trigger occurred, calculate frequency and reset counters
-        if(triggerOccurred){
+        // Only calculate frequency if at least one channel is active
+        if(triggerOccurred && (activeChannel1 || activeChannel2)){
             // Only update frequency if we've counted more than a few samples (avoids false triggers on noise)
             if(samplesSinceTrigger > 2 && timeBase > 0){ // timeBase is in ms/px, samplesSinceTrigger is pixels
-                 // Frequency = 1 / Period
-                 // Period = samplesSinceTrigger * timeBase (ms)
-                 // Period (seconds) = samplesSinceTrigger * timeBase / 1000
-                 // Frequency (Hz) = 1 / (samplesSinceTrigger * timeBase / 1000) = 1000 / (samplesSinceTrigger * timeBase)
+                 // Frequency (Hz) = 1000 / (samplesSinceTrigger * timeBase)
                 measuredFreq = 1000.0 / (samplesSinceTrigger * timeBase);
                 triggeredThisSweep = true; // Mark that a trigger happened in this sweep
             }
@@ -632,21 +632,27 @@ function oscilloscopeScreen() {
     }
 
     // Reset readyForNextTrigger state using hysteresis
-    var hysteresisValue = ADC_MAX_VALUE * 0.02; // 2% hysteresis (adjust as needed)
-    if(!readyForNextTrigger){
+    // Only apply hysteresis logic if at least one channel is active (i.e., triggering is meaningful)
+    if(!readyForNextTrigger && (activeChannel1 || activeChannel2)){
+        var hysteresisValue = ADC_MAX_VALUE * 0.02; // 2% hysteresis (adjust as needed)
         if(triggerEdge == 1){ // Rising edge trigger: need signal to drop below level - hysteresis
             if(triggerSourceAdc < currentTriggerLevel - hysteresisValue) readyForNextTrigger = true;
         } else { // Falling edge trigger: need signal to rise above level + hysteresis
             if(triggerSourceAdc > currentTriggerLevel + hysteresisValue) readyForNextTrigger = true;
         }
+    } else if (!activeChannel1 && !activeChannel2) {
+        // If both channels are off, always be ready for trigger (it will trigger based on initialAdcValue, which is constant)
+        readyForNextTrigger = true;
+        measuredFreq = 0; // No signal means no frequency
     }
+
 
     // Update last trigger state for the next sample comparison
     lastTriggerStateAdc = triggerSourceAdc;
 
     // Increment sample counter (pixels plotted)
     // Stop counting if it gets excessively large (prevents overflow, although unlikely here)
-    if(samplesSinceTrigger < (SCREEN_WIDTH * 10)) samplesSinceTrigger++;
+    if(samplesSinceTrigger < (SCREEN_WIDTH * 100)) samplesSinceTrigger++;
 
 
     // --- Advance Plot Position ---
@@ -684,8 +690,15 @@ function main() {
     var menuSelection = mainMenu();
 
     // Act based on menu selection
-    if (menuSelection == 0) {
-        oscilloscopeScreen(); // Enter the oscilloscope screen
+    if (menuSelection == 0) { // Oscilloscope selected
+        // Perform the USB detection check before starting the scope
+        if (ENABLE_USB_DETECTION && isUsbChargingDetected()) {
+            showUsbWarningAndBlock(); // Show warning and wait for button press
+            // After warning, the loop continues to show the main menu again
+        } else {
+            // If USB not detected (or detection disabled), proceed to oscilloscope
+            oscilloscopeScreen();
+        }
     } else if (menuSelection == 1) {
         settingsMenu(); // Enter the settings menu
     } else if (menuSelection == 2) {
