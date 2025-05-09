@@ -10,7 +10,7 @@ A JavaScript-based oscilloscope application specifically designed for M5Stack de
 
 ![M5BruceOscilloscope Screenshot](./assets/screenshot_scope.png)
 
-![How to use Screenshot](./assets/M5stack)
+![How to use Screenshot](./assets/M5stack.png)
 
 
 ## Features (v1.2)
