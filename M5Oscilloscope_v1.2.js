@@ -18,8 +18,8 @@ var BTN_NAV_DOWN_PIN = 39;     // Typically M5's Button C
 
 // ADC Input Pins
 // These are typically GPIO pins capable of ADC readings.
-var CH1_PIN = 32;
-var CH2_PIN = 33;
+var CH1_PIN = 36;
+var CH2_PIN = 25;
 
 // === USB/Charging Detection Heuristic ===
 // This code tries to detect if the device might be connected to USB power,
