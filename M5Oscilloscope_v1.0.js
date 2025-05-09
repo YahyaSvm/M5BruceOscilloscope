@@ -1,8 +1,6 @@
-// --- START OF FILE M5Oscilloscope_v1.0_fix.js ---
-// M5Oscilloscope v1.0 - Nav Button Fix, Final Polish
 // Developed by YahyaSvm
 
-// === IMPORTANT WARNINGS === (Same as before)
+// === IMPORTANT WARNINGS === 
 // * HIGH VOLTAGE RISK: NEVER connect signals exceeding the M5Stack's ADC input voltage limits
 //   (typically 0V to 3.3V or specified by your ADC pin). Doing so WILL PERMANENTLY DAMAGE YOUR M5STACK.
 // * EXTERNAL CIRCUITRY: For measuring voltages higher than ADC limits or AC signals,
@@ -14,7 +12,7 @@
 // === Global Constants and Settings ===
 var SCREEN_WIDTH = width();
 var SCREEN_HEIGHT = height();
-var APP_VERSION = "v1.0"; // Will update to v1.0.1 or similar if this is a patch
+var APP_VERSION = "v1.0"; 
 
 var ADC_REF_VOLTAGE = 3.3;
 var ADC_MAX_VALUE = 4095;
