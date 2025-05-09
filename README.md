@@ -1,4 +1,4 @@
-# M5BruceOscilloscope - v1.2
+# M5BruceOscilloscope - v1.3
 
 **Author:** YahyaSvm , takagi-1
 **Target Firmware:** [Bruce Firmware by pr3y](https://github.com/pr3y/Bruce)
@@ -13,13 +13,14 @@ A JavaScript-based oscilloscope application specifically designed for M5Stack de
 ![How to use Screenshot](./assets/M5stack.png)
 
 
-## Features (v1.2)
+## Features (v1.3)
 
 *   Targets **Bruce Firmware** by pr3y.
 *   Dual Channel Display (CH2 can be disabled).
 *   Adjustable Time/Pixel (Horizontal sweep speed).
 *   Adjustable Volts/Div (Vertical sensitivity).
 *   Vpp (Peak-to-Peak) Measurement for the selected channel.
+*   Added pause button to new oscilloscope section.
 *   Frequency Measurement (Basic) for the selected channel.
 *   Selectable Measurement Channel (CH1 or CH2).
 *   Configurable Trigger Edge (Rising or Falling).
@@ -37,7 +38,7 @@ A JavaScript-based oscilloscope application specifically designed for M5Stack de
     *   Use a **VOLTAGE DIVIDER CIRCUIT** for voltages greater than the ADC's safe input range.
     *   For AC signals, use appropriate conditioning circuitry (DC offset, clamping diodes).
 *   **PIN VERIFICATION (CRITICAL):**
-    *   Before running, **VERIFY AND CORRECT** the `BTN_M5_SELECT_EXIT_PIN`, `BTN_NAV_UP_PIN`, `BTN_NAV_DOWN_PIN`, `CH1_PIN`, `CH2_PIN`, and the `USB_DETECT_PIN` constants at the top of the `M5BruceOscilloscope_v1.2.js` file to match **YOUR SPECIFIC M5Stack model's GPIOs as recognized by Bruce Firmware**. Incorrect pin assignments will lead to unresponsive controls or malfunction.
+    *   Before running, **VERIFY AND CORRECT** the `BTN_M5_SELECT_EXIT_PIN`, `BTN_NAV_UP_PIN`, `BTN_NAV_DOWN_PIN`, `CH1_PIN`, `CH2_PIN`, and the `USB_DETECT_PIN` constants at the top of the `M5BruceOscilloscope_v1.3.js` file to match **YOUR SPECIFIC M5Stack model's GPIOs as recognized by Bruce Firmware**. Incorrect pin assignments will lead to unresponsive controls or malfunction.
 *   **USB POWER INTERFERENCE:**
     *   Connecting the M5Stack to USB power (for charging or data) can introduce significant noise or affect ADC readings, making accurate oscilloscope measurements difficult or impossible.
     *   This application includes a heuristic to detect potential USB power connection and will display a warning. **For reliable measurements, disconnect the USB cable from the M5Stack before starting the oscilloscope.**
@@ -60,10 +61,10 @@ A JavaScript-based oscilloscope application specifically designed for M5Stack de
 ## Setup and Configuration
 
 1.  **Install Bruce Firmware:** Ensure [Bruce Firmware](https://github.com/pr3y/Bruce) is installed on your M5Stack device.
-2.  **Configure Pins:** Open `M5BruceOscilloscope_v1.2.js` and **carefully set the GPIO pin numbers** for your buttons and ADC inputs at the top of the file, according to how Bruce Firmware recognizes them on your specific M5Stack model. Pay particular attention to `USB_DETECT_PIN` and the `USB_DETECT_THRESHOLD_RATIO` - you might need to experiment with the threshold value on your specific device if the USB detection is unreliable.
+2.  **Configure Pins:** Open `M5BruceOscilloscope_v1.3.js` and **carefully set the GPIO pin numbers** for your buttons and ADC inputs at the top of the file, according to how Bruce Firmware recognizes them on your specific M5Stack model. Pay particular attention to `USB_DETECT_PIN` and the `USB_DETECT_THRESHOLD_RATIO` - you might need to experiment with the threshold value on your specific device if the USB detection is unreliable.
 3.  **Character Width:** Adjust `CHAR_WIDTH_PX` (default: `6`) in the script if text alignment is off on your device's screen with Bruce Firmware's font.
 4.  **Load Script:**
-    *   Transfer the `M5BruceOscilloscope_v1.2.js` file to your M5Stack (e.g., via SD card if Bruce supports it, or by pasting into Bruce's REPL/IDE).
+    *   Transfer the `M5BruceOscilloscope_v1.3.js` file to your M5Stack (e.g., via SD card if Bruce supports it, or by pasting into Bruce's REPL/IDE).
     *   Execute the script within the Bruce Firmware environment.
 
 ## Usage (Button Layout)
@@ -81,12 +82,9 @@ A JavaScript-based oscilloscope application specifically designed for M5Stack de
     *   **Safety Info Screen:** Scroll text DOWN.
     *   **USB Warning Screen:** Exit to previous menu (Any button exits).
 
-## Changelog (v1.2)
+## Changelog (v1.3)
 
-*   **Removed:** Unreliable USB voltage reading and display feature.
-*   **Added:** Heuristic USB/Charging detection mechanism with a warning screen that blocks entry to the oscilloscope if detected.
-*   **Improved:** Menu scrolling implementation to reduce flickering.
-*   **Refined:** Logic for Vpp measurement and triggering when one or both channels are off.
+*   **Added:** Added pause button to new oscilloscope section.
 
 ## Known Issues / Limitations
 
