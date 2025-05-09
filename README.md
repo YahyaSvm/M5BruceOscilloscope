@@ -1,6 +1,6 @@
 # M5BruceOscilloscope - v1.0
 
-**Author:** YahyaSvm
+**Author:** YahyaSvm , takagi-1
 **Target Firmware:** [Bruce Firmware by pr3y](https://github.com/pr3y/Bruce)
 **Version:** 1.0 (Release Date: 5.9.2025) 
 **Languages:** [English](./README.md) | [Türkçe](./README_tr.md)
