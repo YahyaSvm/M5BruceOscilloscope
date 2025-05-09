@@ -287,12 +287,13 @@ function main() {
     else if (menuSelection == 4) {
       drawFillRect(0,0,SCREEN_WIDTH,SCREEN_HEIGHT,COLOR_BACKGROUND); drawHeader("Exiting M5Scope");
       setTextSize(1); setTextColor(COLOR_FOREGROUND);
-      var msg1="Press M5 Btn"; var msg2="to return to menu.";
+      var msg1="Press M5 Btn"; var msg2="to close the app.";
       drawString(msg1, Math.floor(SCREEN_WIDTH/2-(msg1.length*CHAR_WIDTH_PX)/2), SCREEN_HEIGHT/2-10);
       drawString(msg2, Math.floor(SCREEN_WIDTH/2-(msg2.length*CHAR_WIDTH_PX)/2), SCREEN_HEIGHT/2+5);
       drawFooter("", "Back", "");
       while(digitalRead(BTN_M5_SELECT_EXIT_PIN)) { delay(50); }
       delay(200);
+      break
     }
   }
 }
