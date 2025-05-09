@@ -2,7 +2,7 @@
 
 **Author:** YahyaSvm
 **Target Firmware:** [Bruce Firmware by pr3y](https://github.com/pr3y/Bruce)
-**Version:** 1.0 (Release Date: YYYY-MM-DD) <!-- Kendi yayın tarihinizi yazın -->
+**Version:** 1.0 (Release Date: 5/9/2025) 
 **Languages:** [English](./README.md) | [Türkçe](./README_tr.md)
 
 A JavaScript-based oscilloscope application specifically designed for M5Stack devices running **Bruce Firmware**. This project aims to provide a functional oscilloscope experience directly on the M5Stack using the capabilities of the Bruce environment.
