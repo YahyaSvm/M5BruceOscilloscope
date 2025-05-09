@@ -1,16 +1,17 @@
-# M5BruceOsiloskop - v1.0
+# M5BruceOsiloskop - v1.2
 
 **Geliştirici:** YahyaSvm , takagi-1
 **Hedef Firmware:** [Bruce Firmware by pr3y](https://github.com/pr3y/Bruce)
-**Sürüm:** 1.0 (Yayın Tarihi: 5.9.2025)
+**Sürüm:** 1.2 (Yayın Tarihi: [BUGÜNÜN TARİHİ, ÖRN: 2024-XX-XX])
 **Diller:** [English](./README.md) | [Türkçe](./README_tr.md)
 
 M5Stack cihazlarında **Bruce Firmware** çalıştıranlar için özel olarak tasarlanmış JavaScript tabanlı bir osiloskop uygulamasıdır. Bu proje, Bruce ortamının yeteneklerini kullanarak M5Stack üzerinde doğrudan işlevsel bir osiloskop deneyimi sunmayı amaçlamaktadır.
 
 
 ![M5BruceOsiloskop Ekran Görüntüsü](./assets/screenshot_scope.png)
+*(Ekran görüntüsü v1.2 değişikliklerini tam olarak yansıtmayabilir, güncel ekran görüntüsü bekleniyor)*
 
-## Özellikler (v1.0)
+## Özellikler (v1.2)
 
 *   **Bruce Firmware** (pr3y tarafından) hedeflenmiştir.
 *   Çift Kanal Görüntüleme (CH2 devre dışı bırakılabilir).
@@ -20,9 +21,10 @@ M5Stack cihazlarında **Bruce Firmware** çalıştıranlar için özel olarak ta
 *   Seçili kanal için Frekans Ölçümü (Temel).
 *   Seçilebilir Ölçüm Kanalı (CH1 veya CH2).
 *   Yapılandırılabilir Tetikleme Kenarı (Yükselen veya Düşen).
-*   Kolay gezinme için Kaydırmalı Menü Tabanlı Arayüz.
+*   **İyileştirildi:** Kaydırmalı Menü Arayüzü (Kırpma azaltıldı).
 *   Kaydırılabilir metin içeren Özel Güvenlik Bilgileri Ekranı.
 *   Yapılandırılabilir Buton Düzeni (M5StickC benzeri cihazlar için varsayılanlar ayarlanmıştır).
+*   **YENİ:** Heuristik USB/Şarj Algılama ve Uyarı. USB güç bağlantısını algılamaya çalışır ve kullanıcıyı uyararak, bağlantı varken osiloskop ekranına geçişi engeller (çünkü USB gücü gürültülü okumalara neden olabilir). *(Aşağıdaki uyarılara bakın)*
 
 ## !!! ÖNEMLİ GÜVENLİK UYARILARI !!!
 
@@ -33,7 +35,11 @@ M5Stack cihazlarında **Bruce Firmware** çalıştıranlar için özel olarak ta
     *   ADC'nin güvenli giriş aralığından daha yüksek voltajlar için bir **VOLTAJ BÖLÜCÜ DEVRESİ** kullanın.
     *   AC sinyaller için uygun şartlandırma devresi kullanın (DC ofset, kenetleme diyotları).
 *   **PİN DOĞRULAMASI (KRİTİK):**
-    *   Çalıştırmadan önce, `M5BruceOscilloscope_v1.0.js` dosyasının başındaki `BTN_M5_SELECT_EXIT_PIN`, `BTN_NAV_UP_PIN`, `BTN_NAV_DOWN_PIN`, `CH1_PIN` ve `CH2_PIN` sabitlerinin **KENDİ M5Stack modelinizin Bruce Firmware tarafından tanınan GPIO'larıyla eşleştiğini DOĞRULAYIN VE DÜZELTİN**. Yanlış pin atamaları çalışmayan kontrollere veya arızaya yol açar.
+    *   Çalıştırmadan önce, `M5BruceOscilloscope_v1.2.js` dosyasının başındaki `BTN_M5_SELECT_EXIT_PIN`, `BTN_NAV_UP_PIN`, `BTN_NAV_DOWN_PIN`, `CH1_PIN`, `CH2_PIN` ve `USB_DETECT_PIN` sabitlerinin **KENDİ M5Stack modelinizin Bruce Firmware tarafından tanınan GPIO'larıyla eşleştiğini DOĞRULAYIN VE DÜZELTİN**. Yanlış pin atamaları çalışmayan kontrollere veya arızaya yol açar.
+*   **USB GÜÇ ETKİLEŞİMİ:**
+    *   M5Stack'i USB gücüne (şarj veya veri için) bağlamak, önemli ölçüde gürültü ekleyebilir veya ADC okumalarını etkileyebilir, bu da doğru osiloskop ölçümlerini zorlaştırabilir veya imkansız hale getirebilir.
+    *   Bu uygulama, potansiyel USB güç bağlantısını algılamak için bir heuristik içerir ve bir uyarı gösterecektir. **Güvenilir ölçümler için, osiloskopu başlatmadan önce M5Stack'in USB kablosunu çıkarın.**
+    *   USB algılama heuristiği **MÜKEMMEL DEĞİLDİR** ve donanımınıza ve bağladığınız problara bağlı olarak yanlış pozitif veya negatif sonuçlar verebilir. Sadece buna güvenmeyin; en iyi sonuçlar için daima USB gücünü ayırın.
 *   **DENEYSEL YAZILIM:**
     *   Bu yazılımı kullanmak **TAMAMEN SİZİN SORUMLULUĞUNUZDADIR**. Geliştirici (YahyaSvm) herhangi bir hasardan sorumlu değildir.
 
@@ -52,43 +58,46 @@ M5Stack cihazlarında **Bruce Firmware** çalıştıranlar için özel olarak ta
 ## Kurulum ve Yapılandırma
 
 1.  **Bruce Firmware'i Yükleyin:** M5Stack cihazınıza [Bruce Firmware](https://github.com/pr3y/Bruce)'in yüklü olduğundan emin olun.
-2.  **Pinleri Yapılandırın:** `M5BruceOscilloscope_v1.0.js` dosyasını açın ve dosyanın başındaki butonlarınız ve ADC girişleriniz için **GPIO pin numaralarını**, Bruce Firmware'in özel M5Stack modelinizde bunları nasıl tanıdığına göre **dikkatlice ayarlayın**.
+2.  **Pinleri Yapılandırın:** `M5BruceOscilloscope_v1.2.js` dosyasını açın ve dosyanın başındaki butonlarınız ve ADC girişleriniz için **GPIO pin numaralarını**, Bruce Firmware'in özel M5Stack modelinizde bunları nasıl tanıdığına göre **dikkatlice ayarlayın**. Özellikle `USB_DETECT_PIN` ve `USB_DETECT_THRESHOLD_RATIO` değerlerine dikkat edin - USB algılama güvenilir değilse kendi cihazınızda eşik değeri ile denemeler yapmanız gerekebilir.
 3.  **Karakter Genişliği:** Bruce Firmware'in yazı tipiyle cihazınızın ekranında metin hizalaması bozuksa, script'teki `CHAR_WIDTH_PX` (varsayılan: `6`) değerini ayarlayın.
 4.  **Script'i Yükleyin:**
-    *   `M5BruceOscilloscope_v1.0.js` dosyasını M5Stack'inize aktarın (örn. Bruce destekliyorsa SD kart aracılığıyla veya Bruce'un REPL/IDE'sine yapıştırarak).
+    *   `M5BruceOscilloscope_v1.2.js` dosyasını M5Stack'inize aktarın (örn. Bruce destekliyorsa SD kart aracılığıyla veya Bruce'un REPL/IDE'sine yapıştırarak).
     *   Script'i Bruce Firmware ortamında çalıştırın.
 
-## Kullanım (Buton Düzeni v1.0)
+## Kullanım (Buton Düzeni)
 
 *   **M5 Butonu (Ön/Yan):**
     *   **Menüler:** Vurgulanan öğeyi seçin.
     *   **Ayarlar Menüsü:** Seçili ayarın değerini değiştirin / Ayarlardan çıkmak için "Geri" öğesini seçin.
-    *   **Osiloskop/Hakkında/Güvenlik Ekranları:** Önceki menüye çıkın.
+    *   **Osiloskop/Hakkında/Güvenlik Ekranları/USB Uyarı Ekranı:** Önceki menüye çıkın. (USB Uyarı ekranında herhangi bir tuşa basmak çıkarır).
 *   **Üst Buton:**
     *   **Menüler:** YUKARI gidin (önceki öğeyi seçin).
     *   **Güvenlik Bilgisi Ekranı:** Metni YUKARI kaydırın.
+    *   **USB Uyarı Ekranı:** Önceki menüye çıkın (Herhangi bir tuş çıkarır).
 *   **Alt Buton:**
     *   **Menüler:** AŞAĞI gidin (sonraki öğeyi seçin).
     *   **Güvenlik Bilgisi Ekranı:** Metni AŞAĞI kaydırın.
+    *   **USB Uyarı Ekranı:** Önceki menüye çıkın (Herhangi bir tuş çıkarır).
 
-## Değişiklik Kaydı (v1.0)
+## Değişiklik Kaydı (v1.2)
 
-*   Bruce Firmware için ilk genel sürüm.
-*   Menüler ve güvenlik bilgileri için kaydırma özelliği eklendi.
-*   Sezgisel gezinme için buton kontrol şeması revize edildi.
-*   Kapsamlı güvenlik uyarıları eklendi.
-*   Temel osiloskop işlevleri: çift kanal (opsiyonel), Vpp, Frekans, Zaman/Kademe, Volt/Kademe.
+*   **Kaldırıldı:** Güvenilir olmayan USB voltaj okuma ve görüntüleme özelliği.
+*   **Eklendi:** Tespit edildiğinde osiloskop ekranına girişi engelleyen bir uyarı ekranına sahip heuristik USB/Şarj algılama mekanizması.
+*   **İyileştirildi:** Kaydırma menülerindeki kırpmayı azaltmak için implementasyon.
+*   **İyileştirildi:** Bir veya her iki kanal kapalıyken Vpp ölçümü ve tetikleme için mantık.
 
 ## Bilinen Sorunlar / Sınırlamalar
 
 *   Bu script, Bruce Firmware tarafından sağlanan JavaScript ortamı için özel olarak hazırlanmıştır. Diğer M5Stack firmware'leriyle (örn. UIFlow, Arduino, standart Espruino) uyumluluk garanti edilmez.
 *   Çok yüksek frekanslı sinyaller için performans, Bruce içindeki JavaScript yürütme hızıyla sınırlı olabilir.
+*   USB/Şarj algılama, ADC pin durumuna dayanan bir heuristiktir ve tüm M5Stack modellerinde veya senaryolarda %100 güvenilir olmayabilir. Cihazınız için gerektiğinde `USB_DETECT_THRESHOLD_RATIO` ile denemeler yapın.
 *   `digitalRead()` davranışı ve `pinMode()` seçenekleri Bruce'ta diğer ortamlara göre biraz farklılık gösterebilir; mevcut uygulama standart davranışı varsayar.
 
 ## Gelecek Fikirleri
 
 *   AC/DC Kuplajı (donanım arayüzü ve yazılım mantığı gerektirir).
 *   Daha gelişmiş tetikleme modları (Normal, Otomatik, Tek).
+*   Ayarlanabilir tetikleme seviyesi.
 *   Ayarları kaydetme/yükleme (Bruce bir dosya sistemi API'si sağlıyorsa).
 
 ## Katkıda Bulunma
