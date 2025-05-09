@@ -1,6 +1,6 @@
 var SCREEN_WIDTH = width();
 var SCREEN_HEIGHT = height();
-var APP_VERSION = "v1.2"; // Increment version
+var APP_VERSION = "v1.3"; // Increment version for changes
 
 var ADC_REF_VOLTAGE = 3.3;
 var ADC_MAX_VALUE = 4095; // Assuming 12-bit ADC
@@ -12,9 +12,9 @@ var CHAR_WIDTH_PX = 6; // Approximate width of a standard font character in pixe
 // M5Stack Basic/Gray/Fire buttons are typically 37, 38, 39.
 // Bruce maps these differently in some configurations. 37=Select/A, 35=Up/B, 39=Down/C seems common.
 // VERIFY THIS ON YOUR DEVICE IF BUTTONS AREN'T RESPONDING!
-var BTN_M5_SELECT_EXIT_PIN = 37; // Typically M5's Button A
-var BTN_NAV_UP_PIN = 35;       // Typically M5's Button B
-var BTN_NAV_DOWN_PIN = 39;     // Typically M5's Button C
+var BTN_M5_SELECT_EXIT_PIN = 37; // Typically M5's Button A (Used for Exit from Scope)
+var BTN_NAV_UP_PIN = 35;       // Typically M5's Button B (Used for Pause/Unpause in Scope)
+var BTN_NAV_DOWN_PIN = 39;     // Typically M5's Button C (Unused in Scope per request)
 
 // ADC Input Pins
 // These are typically GPIO pins capable of ADC readings.
@@ -43,6 +43,7 @@ var COLOR_BACKGROUND = color(0,0,0); var COLOR_FOREGROUND = color(200,200,200);
 var COLOR_ACCENT = color(0,120,200); var COLOR_GRID_DARK = color(30,30,30);
 var COLOR_GRID_LIGHT = color(50,50,50); var COLOR_CH1 = color(255,60,60);
 var COLOR_CH2 = color(60,200,60); var COLOR_WARNING_TEXT = color(255,100,0);
+var COLOR_PAUSED_TEXT = color(255, 200, 0); // Color for PAUSED message
 
 // === Application Settings (Variables) ===
 // Note: These variables store the *current* setting, derived from the index into the values array.
@@ -160,6 +161,7 @@ function showUsbWarningAndBlock() {
     drawFooter("", "Press Any Button", ""); // Hint to exit
 
     // Wait for any button press to return to the menu
+    // Check all relevant button pins
     while (digitalRead(BTN_M5_SELECT_EXIT_PIN) && digitalRead(BTN_NAV_UP_PIN) && digitalRead(BTN_NAV_DOWN_PIN)) {
         delay(50);
     }
@@ -242,7 +244,7 @@ function settingsMenu() {
       selectedIndex = (selectedIndex + 1) % menuStructure.length;
        // Adjust viewTopIndex for scrolling
       if (selectedIndex >= viewTopIndex + maxVisibleItems) { viewTopIndex = selectedIndex - maxVisibleItems + 1; }
-      else if (selectedIndex < viewTopIndex) { /* Should not happen with DOWN, but defensive */ viewTopIndex = selectedIndex; }
+       else if (selectedIndex < viewTopIndex) { /* Should not happen with DOWN, but defensive */ viewTopIndex = selectedIndex; }
       redrawScreen = true; // Index changed, force redraw
       delay(180); // Debounce
     }
@@ -399,7 +401,8 @@ function oscilloscopeScreen() {
   var readyForNextTrigger = true; // Flag to indicate if the scope is waiting for a new trigger event
   var triggeredThisSweep = false; // Flag to indicate if a trigger occurred during the current sweep
 
-  // Removed USB voltage display variables
+  // *** NEW: Pause variable ***
+  var isPaused = false;
 
   // Helper to convert ADC value to screen Y coordinate
   function adcToScreenY(adcValue){
@@ -469,7 +472,6 @@ function oscilloscopeScreen() {
     var tdivWidth = tdivStrText.length * CHAR_WIDTH_PX;
     drawString(tdivStrText, SCREEN_WIDTH - tdivWidth - 3, infoY);
 
-
     // Draw Vpp and Freq (centered if space allows)
     var vppWidth = vppStr.length * CHAR_WIDTH_PX;
     var hzWidth = hzStr.length * CHAR_WIDTH_PX;
@@ -495,7 +497,8 @@ function oscilloscopeScreen() {
   drawHeader("Oscilloscope");
   drawScopeGrid(); // Draw grid initially
   printScopeInfo(); // Draw info bar initially
-  drawFooter("", "Exit", ""); // Draw footer initially
+  // *** Footer hints updated for Scope mode ***
+  drawFooter("Pause", "Exit", ""); // Hints: Left=Pause, Top=Exit, Bottom=None
 
   // Initialize plot position and previous points
   initialAdcValue = ADC_MAX_VALUE/2; // Start plot from center vertically
@@ -504,163 +507,206 @@ function oscilloscopeScreen() {
   currentX = graphOriginX; // Start from the left edge of the graph area
 
   while (true) {
-    // Check Exit Button
-    if (!digitalRead(BTN_M5_SELECT_EXIT_PIN)) { delay(200); return; }
-
-    // --- Read ADC Channels ---
-    var adcValCh1 = analogRead(CH1_PIN);
-    // If CH2 is off, its ADC reading is not used, but we set a default for plotting purposes
-    var adcValCh2 = activeChannel2 ? analogRead(CH2_PIN) : initialAdcValue;
-
-    // Check if analogRead returned valid numbers before proceeding
-    if (adcValCh1 === null || isNaN(adcValCh1) || (activeChannel2 && (adcValCh2 === null || isNaN(adcValCh2)))) {
-        // Handle ADC read error - maybe display an error message or skip this frame
-        // For now, just skip this frame to prevent errors
-        print("ADC read failed!"); // For Bruce console debugging
-        delay(timeBase); // Wait for the frame duration
-        continue; // Skip the rest of the loop iteration
+    // --- Handle Button Presses (always check) ---
+    // Button A (Top/Select/Exit): Exit Scope
+    if (!digitalRead(BTN_M5_SELECT_EXIT_PIN)) {
+        delay(200); // Debounce
+        return; // Exit this function, go back to main menu
     }
 
+    // Button B (Left/NavUp): Toggle Pause
+    if (!digitalRead(BTN_NAV_UP_PIN)) {
+        delay(150); // Debounce
+        // Check again after debounce to confirm button was held
+        if (!digitalRead(BTN_NAV_UP_PIN)) {
+             isPaused = !isPaused; // Toggle pause state
 
-    // Convert ADC values to screen coordinates
-    var screenYCh1 = adcToScreenY(adcValCh1);
-    // If CH2 is off, its plot stays at the center line
-    var screenYCh2 = activeChannel2 ? adcToScreenY(adcValCh2) : adcToScreenY(initialAdcValue);
+             // *** Update UI for Pause State ***
+             var pauseMsg = isPaused ? "PAUSED" : "        "; // Use spaces to clear "PAUSED"
+             var pauseWidth = "PAUSED".length * CHAR_WIDTH_PX; // Calculate width based on the word "PAUSED"
+             var pauseHeight = 12; // Approximate height for setTextSize(1)
+             var pauseY = SCREEN_HEIGHT - FOOTER_HEIGHT - 15; // Position above footer
 
-    // --- Drawing Logic ---
-    // If we've reached the end of the screen, start a new sweep
-    if(currentX >= graphOriginX + graphRenderWidth) {
-        currentX = graphOriginX; // Reset X position
-        drawScopeGrid(); // Clear the old trace by redrawing the grid
-        printScopeInfo(); // Update info bar (esp. measurements)
-        minAdcValue = ADC_MAX_VALUE; // Reset min/max for new sweep
-        maxAdcValue = 0;
-        if(!triggeredThisSweep && measuredFreq > 0) measuredFreq = 0; // If no trigger occurred, freq is invalid
-        triggeredThisSweep = false; // Reset trigger flag for new sweep
-        readyForNextTrigger = true; // Reset trigger ready state for new sweep
-         // Initialize previous points to the center or first sample for smooth start
-        prevY1 = adcToScreenY(adcValCh1); // Use actual first sample for smooth start
-        prevY2 = activeChannel2 ? adcToScreenY(adcValCh2) : adcToScreenY(initialAdcValue);
+             // Clear the area where PAUSED text goes
+             drawFillRect(Math.floor(SCREEN_WIDTH/2 - pauseWidth/2) - 2, pauseY - 2, pauseWidth + 4, pauseHeight + 4, COLOR_BACKGROUND);
+
+             if (isPaused) {
+                // Draw PAUSED text if paused
+                setTextSize(1);
+                setTextColor(COLOR_PAUSED_TEXT);
+                drawString("PAUSED", Math.floor(SCREEN_WIDTH/2 - pauseWidth/2), pauseY);
+             }
+             // If unpaused, the area is already cleared. The next data redraw will cover anything else.
+
+             // Debounce after toggling
+             delay(200);
+        }
     }
 
-    // Draw the line segment from the previous point to the current point
-    // Only draw if we are past the starting X position
-    if(currentX > graphOriginX){
-        if(activeChannel1) drawLine(currentX-1, prevY1, currentX, screenYCh1, COLOR_CH1);
-        if(activeChannel2) drawLine(currentX-1, prevY2, currentX, screenYCh2, COLOR_CH2);
-    } else { // At the very beginning of the sweep (currentX === graphOriginX)
-        // Just update prevY to the current sample without drawing a line yet
-         prevY1 = screenYCh1;
-         prevY2 = screenYCh2;
-    }
-
-    // Update previous Y coordinates for the next step
-    prevY1 = screenYCh1;
-    prevY2 = screenYCh2;
-
-    // --- Measurement (Vpp) ---
-    // Determine the ADC value to use for Vpp/Freq measurement.
-    // Prefer the selected measureChannel if it's active.
-    // Fallback to the *first active channel* if the selected measureChannel is off.
-    // If both are off, measure the initial center value (will result in 0 Vpp).
-    var adcValueForMeasurement = initialAdcValue; // Default if both off
-    if (measureChannel === 1 && activeChannel1) {
-         adcValueForMeasurement = adcValCh1;
-    } else if (measureChannel === 2 && activeChannel2) {
-         adcValueForMeasurement = adcValCh2;
-    } else if (activeChannel1) { // Selected channel is off, but CH1 is on
-         adcValueForMeasurement = adcValCh1;
-         measureChannel = 1; // Auto-switch measure channel? Maybe not, keep user setting. Just measure CH1.
-    } else if (activeChannel2) { // Selected channel is off, but CH2 is on
-         adcValueForMeasurement = adcValCh2;
-         measureChannel = 2; // Auto-switch measure channel? Just measure CH2.
-    }
-    // Note: The setting in the menu will still show the user's choice,
-    // but the measurement here uses an active channel if the chosen one is off.
-    // This is a pragmatic approach. The menu setting might need a visual indicator
-    // if the selected channel is off, but that's more complex UI.
-
-    // Update min/max ADC values for Vpp calculation *only if at least one channel is active*
-    if (activeChannel1 || activeChannel2) {
-         if (adcValueForMeasurement > maxAdcValue) maxAdcValue = adcValueForMeasurement;
-         if (adcValueForMeasurement < minAdcValue) minAdcValue = adcValueForMeasurement;
-    } else {
-         // If both channels are off, reset min/max to indicate no valid measurement
-         minAdcValue = ADC_MAX_VALUE;
-         maxAdcValue = 0;
-    }
+    // Button C (Bottom/NavDown): Do Nothing (No check needed here as no action is desired)
+    // The loop continues if BTN_NAV_DOWN_PIN is pressed, but nothing happens.
 
 
-    // --- Simple Edge Triggering and Frequency Counting ---
-    // Determine the ADC source for triggering.
-    // Default to CH1 if active, then CH2 if CH1 is off and CH2 is active.
-    // If both off, triggering is effectively disabled (always triggers or never triggers depending on level).
-    var triggerSourceAdc = initialAdcValue; // Default if both channels off
-    if (activeChannel1) triggerSourceAdc = adcValCh1;
-    else if (activeChannel2) triggerSourceAdc = adcValCh2;
+    // --- Oscilloscope Logic (Read ADC, Draw, Measure, Trigger) ---
+    // ONLY run this block if not paused
+    if (!isPaused) {
+        // --- Read ADC Channels ---
+        var adcValCh1 = analogRead(CH1_PIN);
+        // If CH2 is off, its ADC reading is not used, but we set a default for plotting purposes
+        var adcValCh2 = activeChannel2 ? analogRead(CH2_PIN) : initialAdcValue;
 
-    var currentTriggerLevel = triggerLevelAdc; // Get current trigger level (fixed for now)
+        // Check if analogRead returned valid numbers before proceeding
+        if (adcValCh1 === null || isNaN(adcValCh1) || (activeChannel2 && (adcValCh2 === null || isNaN(adcValCh2)))) {
+            // Handle ADC read error - maybe display an error message or skip this frame
+            // For now, just skip this frame to prevent errors
+            print("ADC read failed!"); // For Bruce console debugging
+            delay(timeBase); // Wait for the frame duration
+            continue; // Skip the rest of the loop iteration
+        }
 
-    // Check for trigger event if ready
-    if(readyForNextTrigger){
-        var triggerOccurred = false;
-        // Rising edge trigger: current sample crosses *above* level and previous was *at or below*
-        if(triggerEdge == 1){
-            if(triggerSourceAdc > currentTriggerLevel && lastTriggerStateAdc <= currentTriggerLevel) {
-                triggerOccurred = true;
+        // Convert ADC values to screen coordinates
+        var screenYCh1 = adcToScreenY(adcValCh1);
+        // If CH2 is off, its plot stays at the center line
+        var screenYCh2 = activeChannel2 ? adcToScreenY(adcValCh2) : adcToScreenY(initialAdcValue);
+
+        // --- Drawing Logic ---
+        // If we've reached the end of the screen, start a new sweep
+        if(currentX >= graphOriginX + graphRenderWidth) {
+            currentX = graphOriginX; // Reset X position
+            drawScopeGrid(); // Clear the old trace by redrawing the grid
+            printScopeInfo(); // Update info bar (esp. measurements)
+            minAdcValue = ADC_MAX_VALUE; // Reset min/max for new sweep
+            maxAdcValue = 0;
+            if(!triggeredThisSweep && measuredFreq > 0) measuredFreq = 0; // If no trigger occurred, freq is invalid
+            triggeredThisSweep = false; // Reset trigger flag for new sweep
+            readyForNextTrigger = true; // Reset trigger ready state for new sweep
+             // Initialize previous points to the center or first sample for smooth start
+            prevY1 = adcToScreenY(adcValCh1); // Use actual first sample for smooth start
+            prevY2 = activeChannel2 ? adcToScreenY(adcValCh2) : adcToScreenY(initialAdcValue);
+        }
+
+        // Draw the line segment from the previous point to the current point
+        // Only draw if we are past the starting X position
+        if(currentX > graphOriginX){
+            if(activeChannel1) drawLine(currentX-1, prevY1, currentX, screenYCh1, COLOR_CH1);
+            if(activeChannel2) drawLine(currentX-1, prevY2, currentX, screenYCh2, COLOR_CH2);
+        } else { // At the very beginning of the sweep (currentX === graphOriginX)
+            // Just update prevY to the current sample without drawing a line yet
+             prevY1 = screenYCh1;
+             prevY2 = screenYCh2;
+        }
+
+        // Update previous Y coordinates for the next step
+        prevY1 = screenYCh1;
+        prevY2 = screenYCh2;
+
+        // --- Measurement (Vpp) ---
+        // Determine the ADC value to use for Vpp/Freq measurement.
+        // Prefer the selected measureChannel if it's active.
+        // Fallback to the *first active channel* if the selected measureChannel is off.
+        // If both are off, measure the initial center value (will result in 0 Vpp).
+        var adcValueForMeasurement = initialAdcValue; // Default if both off
+        if (measureChannel === 1 && activeChannel1) {
+             adcValueForMeasurement = adcValCh1;
+        } else if (measureChannel === 2 && activeChannel2) {
+             adcValueForMeasurement = adcValCh2;
+        } else if (activeChannel1) { // Selected channel is off, but CH1 is on
+             adcValueForMeasurement = adcValCh1;
+             // measureChannel = 1; // Auto-switch measure channel? Maybe not, keep user setting. Just measure CH1.
+        } else if (activeChannel2) { // Selected channel is off, but CH2 is on
+             adcValueForMeasurement = adcValCh2;
+             // measureChannel = 2; // Auto-switch measure channel? Just measure CH2.
+        }
+        // Note: The setting in the menu will still show the user's choice,
+        // but the measurement here uses an active channel if the chosen one is off.
+        // This is a pragmatic approach. The menu setting might need a visual indicator
+        // if the selected channel is off, but that's more complex UI.
+
+        // Update min/max ADC values for Vpp calculation *only if at least one channel is active*
+        if (activeChannel1 || activeChannel2) {
+             if (adcValueForMeasurement > maxAdcValue) maxAdcValue = adcValueForMeasurement;
+             if (adcValueForMeasurement < minAdcValue) minAdcValue = adcValueForMeasurement;
+        } else {
+             // If both channels are off, reset min/max to indicate no valid measurement
+             minAdcValue = ADC_MAX_VALUE;
+             maxAdcValue = 0;
+        }
+
+        // --- Simple Edge Triggering and Frequency Counting ---
+        // Determine the ADC source for triggering.
+        // Default to CH1 if active, then CH2 if CH1 is off and CH2 is active.
+        // If both off, triggering is effectively disabled (always triggers or never triggers depending on level).
+        var triggerSourceAdc = initialAdcValue; // Default if both channels off
+        if (activeChannel1) triggerSourceAdc = adcValCh1;
+        else if (activeChannel2) triggerSourceAdc = adcValCh2;
+
+        var currentTriggerLevel = triggerLevelAdc; // Get current trigger level (fixed for now)
+
+        // Check for trigger event if ready
+        if(readyForNextTrigger){
+            var triggerOccurred = false;
+            // Rising edge trigger: current sample crosses *above* level and previous was *at or below*
+            if(triggerEdge == 1){
+                if(triggerSourceAdc > currentTriggerLevel && lastTriggerStateAdc <= currentTriggerLevel) {
+                    triggerOccurred = true;
+                }
+            }
+            // Falling edge trigger: current sample crosses *below* level and previous was *at or above*
+            else { // triggerEdge == 0
+                if(triggerSourceAdc < currentTriggerLevel && lastTriggerStateAdc >= currentTriggerLevel) {
+                    triggerOccurred = true;
+                }
+            }
+
+            // If trigger occurred, calculate frequency and reset counters
+            // Only calculate frequency if at least one channel is active
+            if(triggerOccurred && (activeChannel1 || activeChannel2)){
+                // Only update frequency if we've counted more than a few samples (avoids false triggers on noise)
+                if(samplesSinceTrigger > 2 && timeBase > 0){ // timeBase is in ms/px, samplesSinceTrigger is pixels
+                     // Frequency (Hz) = 1000 / (samplesSinceTrigger * timeBase)
+                    measuredFreq = 1000.0 / (samplesSinceTrigger * timeBase);
+                    triggeredThisSweep = true; // Mark that a trigger happened in this sweep
+                }
+                samplesSinceTrigger = 0; // Reset sample counter after trigger
+                readyForNextTrigger = false; // Wait for trigger source to move away from level + hysteresis before being ready again
             }
         }
-        // Falling edge trigger: current sample crosses *below* level and previous was *at or above*
-        else { // triggerEdge == 0
-            if(triggerSourceAdc < currentTriggerLevel && lastTriggerStateAdc >= currentTriggerLevel) {
-                triggerOccurred = true;
+
+        // Reset readyForNextTrigger state using hysteresis
+        // Only apply hysteresis logic if at least one channel is active (i.e., triggering is meaningful)
+        if(!readyForNextTrigger && (activeChannel1 || activeChannel2)){
+            var hysteresisValue = ADC_MAX_VALUE * 0.02; // 2% hysteresis (adjust as needed)
+            if(triggerEdge == 1){ // Rising edge trigger: need signal to drop below level - hysteresis
+                if(triggerSourceAdc < currentTriggerLevel - hysteresisValue) readyForNextTrigger = true;
+            } else { // Falling edge trigger: need signal to rise above level + hysteresis
+                if(triggerSourceAdc > currentTriggerLevel + hysteresisValue) readyForNextTrigger = true;
             }
+        } else if (!activeChannel1 && !activeChannel2) {
+            // If both channels are off, always be ready for trigger (it will trigger based on initialAdcValue, which is constant)
+            readyForNextTrigger = true;
+            measuredFreq = 0; // No signal means no frequency
         }
 
-        // If trigger occurred, calculate frequency and reset counters
-        // Only calculate frequency if at least one channel is active
-        if(triggerOccurred && (activeChannel1 || activeChannel2)){
-            // Only update frequency if we've counted more than a few samples (avoids false triggers on noise)
-            if(samplesSinceTrigger > 2 && timeBase > 0){ // timeBase is in ms/px, samplesSinceTrigger is pixels
-                 // Frequency (Hz) = 1000 / (samplesSinceTrigger * timeBase)
-                measuredFreq = 1000.0 / (samplesSinceTrigger * timeBase);
-                triggeredThisSweep = true; // Mark that a trigger happened in this sweep
-            }
-            samplesSinceTrigger = 0; // Reset sample counter after trigger
-            readyForNextTrigger = false; // Wait for trigger source to move away from level + hysteresis before being ready again
-        }
+        // Update last trigger state for the next sample comparison
+        lastTriggerStateAdc = triggerSourceAdc;
+
+        // Increment sample counter (pixels plotted)
+        // Stop counting if it gets excessively large (prevents overflow, although unlikely here)
+        if(samplesSinceTrigger < (SCREEN_WIDTH * 100)) samplesSinceTrigger++;
+
+        // --- Advance Plot Position ---
+        currentX++; // Move to the next pixel column
+
+         // --- Wait for next sample ---
+        // The delay determines the horizontal scale (time per pixel)
+        delay(timeBase);
+
+    } else { // *** If Paused ***
+        // When paused, we still need a small delay so the loop doesn't hog the CPU
+        // and button presses are still responsive.
+        delay(50);
     }
-
-    // Reset readyForNextTrigger state using hysteresis
-    // Only apply hysteresis logic if at least one channel is active (i.e., triggering is meaningful)
-    if(!readyForNextTrigger && (activeChannel1 || activeChannel2)){
-        var hysteresisValue = ADC_MAX_VALUE * 0.02; // 2% hysteresis (adjust as needed)
-        if(triggerEdge == 1){ // Rising edge trigger: need signal to drop below level - hysteresis
-            if(triggerSourceAdc < currentTriggerLevel - hysteresisValue) readyForNextTrigger = true;
-        } else { // Falling edge trigger: need signal to rise above level + hysteresis
-            if(triggerSourceAdc > currentTriggerLevel + hysteresisValue) readyForNextTrigger = true;
-        }
-    } else if (!activeChannel1 && !activeChannel2) {
-        // If both channels are off, always be ready for trigger (it will trigger based on initialAdcValue, which is constant)
-        readyForNextTrigger = true;
-        measuredFreq = 0; // No signal means no frequency
-    }
-
-
-    // Update last trigger state for the next sample comparison
-    lastTriggerStateAdc = triggerSourceAdc;
-
-    // Increment sample counter (pixels plotted)
-    // Stop counting if it gets excessively large (prevents overflow, although unlikely here)
-    if(samplesSinceTrigger < (SCREEN_WIDTH * 100)) samplesSinceTrigger++;
-
-
-    // --- Advance Plot Position ---
-    currentX++; // Move to the next pixel column
-
-    // --- Wait for next sample ---
-    // The delay determines the horizontal scale (time per pixel)
-    delay(timeBase);
+    // The loop continues, checking buttons regardless of pause state
   }
 }
 
