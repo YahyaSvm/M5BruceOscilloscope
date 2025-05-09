@@ -2,14 +2,13 @@
 
 **Geliştirici:** YahyaSvm , takagi-1
 **Hedef Firmware:** [Bruce Firmware by pr3y](https://github.com/pr3y/Bruce)
-**Sürüm:** 1.2 (Yayın Tarihi: [BUGÜNÜN TARİHİ, ÖRN: 2024-XX-XX])
+**Sürüm:** 1.2 (Yayın Tarihi: [2025-9-5)
 **Diller:** [English](./README.md) | [Türkçe](./README_tr.md)
 
 M5Stack cihazlarında **Bruce Firmware** çalıştıranlar için özel olarak tasarlanmış JavaScript tabanlı bir osiloskop uygulamasıdır. Bu proje, Bruce ortamının yeteneklerini kullanarak M5Stack üzerinde doğrudan işlevsel bir osiloskop deneyimi sunmayı amaçlamaktadır.
 
 
 ![M5BruceOsiloskop Ekran Görüntüsü](./assets/screenshot_scope.png)
-*(Ekran görüntüsü v1.2 değişikliklerini tam olarak yansıtmayabilir, güncel ekran görüntüsü bekleniyor)*
 
 ## Özellikler (v1.2)
 
