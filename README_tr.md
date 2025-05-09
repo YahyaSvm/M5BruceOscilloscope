@@ -10,6 +10,8 @@ M5Stack cihazlarında **Bruce Firmware** çalıştıranlar için özel olarak ta
 
 ![M5BruceOsiloskop Ekran Görüntüsü](./assets/screenshot_scope.png)
 
+![How to use Screenshot](./assets/M5stack.png)
+
 ## Özellikler (v1.2)
 
 *   **Bruce Firmware** (pr3y tarafından) hedeflenmiştir.
