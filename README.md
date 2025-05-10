@@ -16,7 +16,7 @@ A JavaScript-based oscilloscope application specifically designed for M5Stack de
 ## Features (v1.3)
 
 *   Targets **Bruce Firmware** by pr3y.
-*   Dual Channel Display (CH2 can be disabled).
+*   Dual Channel Display (CH2 disabled defult).
 *   Adjustable Time/Pixel (Horizontal sweep speed).
 *   Adjustable Volts/Div (Vertical sensitivity).
 *   Vpp (Peak-to-Peak) Measurement for the selected channel.
@@ -27,7 +27,7 @@ A JavaScript-based oscilloscope application specifically designed for M5Stack de
 *   **Improved:** Scrolling Menu-Driven Interface (Reduced flickering).
 *   Dedicated Safety Information Screen with scrolling text.
 *   Configurable Button Layout (defaults set for M5StickC-like devices).
-*   **NEW:** Heuristic USB/Charging Detection & Warning. Attempts to detect USB power connection and warns the user, preventing entry to the oscilloscope screen while likely connected (as USB power can cause noisy readings). *(See warnings below)*
+*   **NEW:** Heuristic USB/Charging Detection & Warning. Attempts to detect USB power connection and warns the user, preventing entry to the oscilloscope screen while likely connected (as USB power can cause noisy readings) *(See warnings below)(not working now).*
 
 ## !!! IMPORTANT SAFETY WARNINGS !!!
 
@@ -44,7 +44,7 @@ A JavaScript-based oscilloscope application specifically designed for M5Stack de
     *   This application includes a heuristic to detect potential USB power connection and will display a warning. **For reliable measurements, disconnect the USB cable from the M5Stack before starting the oscilloscope.**
     *   The USB detection heuristic is **NOT PERFECT** and might give false positives or negatives depending on your hardware and the probes connected. Do not solely rely on it; always disconnect USB power for best results.
 *   **EXPERIMENTAL SOFTWARE:**
-    *   Use this software at **YOUR OWN RISK**. The developer (YahyaSvm) is not responsible for any damage.
+    *   Use this software at **YOUR OWN RISK**. The developers (YahyaSvm , takagi-1) is not responsible for any damage.
 
 ## Hardware Requirements
 
