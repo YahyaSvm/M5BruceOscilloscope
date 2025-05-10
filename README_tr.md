@@ -15,7 +15,7 @@ M5Stack cihazlarında **Bruce Firmware** çalıştıranlar için özel olarak ta
 ## Özellikler (v1.3)
 
 *   **Bruce Firmware** (pr3y tarafından) hedeflenmiştir.
-*   Çift Kanal Görüntüleme (CH2 devre dışı bırakılabilir).
+*   Çift Kanal Görüntüleme (CH2 varsayılanda devre dışı).
 *   Ayarlanabilir Zaman/Piksel (Yatay tarama hızı).
 *   Yeni osiloskop kımına pause butonu eklendi.
 *   Ayarlanabilir Volt/Kademe (Dikey hassasiyet).
@@ -26,7 +26,7 @@ M5Stack cihazlarında **Bruce Firmware** çalıştıranlar için özel olarak ta
 *   **İyileştirildi:** Kaydırmalı Menü Arayüzü (Kırpma azaltıldı).
 *   Kaydırılabilir metin içeren Özel Güvenlik Bilgileri Ekranı.
 *   Yapılandırılabilir Buton Düzeni (M5StickC benzeri cihazlar için varsayılanlar ayarlanmıştır).
-*   **YENİ:** Heuristik USB/Şarj Algılama ve Uyarı. USB güç bağlantısını algılamaya çalışır ve kullanıcıyı uyararak, bağlantı varken osiloskop ekranına geçişi engeller (çünkü USB gücü gürültülü okumalara neden olabilir). *(Aşağıdaki uyarılara bakın)*
+*   **YENİ:** Heuristik USB/Şarj Algılama ve Uyarı. USB güç bağlantısını algılamaya çalışır ve kullanıcıyı uyararak, bağlantı varken osiloskop ekranına geçişi engeller (çünkü USB gücü gürültülü okumalara neden olabilir) *(Aşağıdaki uyarılara bakın)(şuan çalışmıyor)*
 
 ## !!! ÖNEMLİ GÜVENLİK UYARILARI !!!
 
@@ -43,7 +43,7 @@ M5Stack cihazlarında **Bruce Firmware** çalıştıranlar için özel olarak ta
     *   Bu uygulama, potansiyel USB güç bağlantısını algılamak için bir heuristik içerir ve bir uyarı gösterecektir. **Güvenilir ölçümler için, osiloskopu başlatmadan önce M5Stack'in USB kablosunu çıkarın.**
     *   USB algılama heuristiği **MÜKEMMEL DEĞİLDİR** ve donanımınıza ve bağladığınız problara bağlı olarak yanlış pozitif veya negatif sonuçlar verebilir. Sadece buna güvenmeyin; en iyi sonuçlar için daima USB gücünü ayırın.
 *   **DENEYSEL YAZILIM:**
-    *   Bu yazılımı kullanmak **TAMAMEN SİZİN SORUMLULUĞUNUZDADIR**. Geliştirici (YahyaSvm) herhangi bir hasardan sorumlu değildir.
+    *   Bu yazılımı kullanmak **TAMAMEN SİZİN SORUMLULUĞUNUZDADIR**. Geliştiriciler (YahyaSvm , takagi1) herhangi bir hasardan sorumlu değildir.
 
 ## Donanım Gereksinimleri
 
