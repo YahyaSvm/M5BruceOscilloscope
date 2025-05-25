@@ -1,8 +1,8 @@
-# M5BruceOscilloscope - v1.4
+# M5BruceOscilloscope - v1.5
 
 **Author:** YahyaSvm, takagi-1
 **Target Firmware:** [Bruce Firmware by pr3y](https://github.com/pr3y/Bruce)
-**Version:** 1.4 (Release Date: 2025-11-5)
+**Version:** 1.5 (Release Date: 2024-07-29)
 **Languages:** [English](./README.md) | [Türkçe](./README_tr.md)
 
 A JavaScript-based oscilloscope application specifically designed for M5Stack devices running **Bruce Firmware**. This project aims to provide a functional oscilloscope experience directly on the M5Stack using the capabilities of the Bruce environment.
@@ -10,12 +10,13 @@ A JavaScript-based oscilloscope application specifically designed for M5Stack de
 ![M5BruceOscilloscope Screenshot](./assets/screenshot_scope.png)
 ![How to use Screenshot](./assets/M5stack.png)
 
-## Features (v1.4)
+## Features (v1.5)
 
 *   Targets **Bruce Firmware** by pr3y.
 *   Dual Channel Display (CH2 disabled by default).
 *   Adjustable Time/Pixel (Horizontal sweep speed).
 *   Adjustable Volts/Div (Vertical sensitivity).
+*   Adjustable Trigger Level (selectable percentages: 10%, 25%, 50%, 75%, 90%).
 *   Vpp (Peak-to-Peak) Measurement for the selected channel.
 *   Frequency Measurement (Basic) for the selected channel.
 *   Selectable Measurement Channel (CH1 or CH2).
@@ -23,7 +24,7 @@ A JavaScript-based oscilloscope application specifically designed for M5Stack de
 *   Scrolling Menu-Driven Interface.
 *   Dedicated Safety Information Screen with scrolling text.
 *   Configurable Button Layout.
-*   Heuristic USB/Charging Detection & Warning (Experimental).
+*   Heuristic USB/Charging Detection & Warning (Experimental, now non-blocking with 'Proceed' option).
 *   **NEW (v1.4): Enhanced Oscilloscope Pause Functionality:**
     *   When "Pause" is pressed, the current waveform on screen is **instantly frozen**.
     *   Vpp and Frequency values at the moment of pause are displayed on the info bar.
@@ -63,10 +64,10 @@ A JavaScript-based oscilloscope application specifically designed for M5Stack de
 ## Setup and Configuration
 
 1.  **Install Bruce Firmware:** Ensure [Bruce Firmware](https://github.com/pr3y/Bruce) is installed on your M5Stack device.
-2.  **Configure Pins:** Open `M5BruceOscilloscope_v1.4.js` (or current version) and **carefully set the GPIO pin numbers** for your buttons, ADC inputs, and battery pin (if used) at the top of the file, according to how Bruce Firmware recognizes them on your specific M5Stack model.
+2.  **Configure Pins:** Open `M5BruceOscilloscope_v1.5.js` (or current version) and **carefully set the GPIO pin numbers** for your buttons, ADC inputs, and battery pin (if used) at the top of the file, according to how Bruce Firmware recognizes them on your specific M5Stack model.
 3.  **Character Width:** Adjust `CHAR_WIDTH_PX` (default: `6`) in the script if text alignment is off on your device's screen with Bruce Firmware's font.
 4.  **Load Script:**
-    *   Transfer the `M5BruceOscilloscope_v1.4.js` file to your M5Stack (e.g., via SD card if Bruce supports it, or by pasting into Bruce's REPL/IDE).
+    *   Transfer the `M5BruceOscilloscope_v1.5.js` file to your M5Stack (e.g., via SD card if Bruce supports it, or by pasting into Bruce's REPL/IDE).
     *   Execute the script within the Bruce Firmware environment.
 
 ## Usage (Button Layout)
@@ -74,17 +75,24 @@ A JavaScript-based oscilloscope application specifically designed for M5Stack de
 *   **M5 Button (Front/Side - Typically GPIO 37):**
     *   **Menus:** Select highlighted item.
     *   **Settings Menu:** Change value of selected setting / Select "Back" item to exit Settings.
-    *   **Oscilloscope/About/Safety Screens/USB Warning Screen:** Exit to previous menu. (Any button press exits the USB Warning).
+    *   **Oscilloscope/About/Safety Screens:** Exit to previous menu.
+    *   **USB Warning Screen:** Select "Menu" to return to the main menu.
 *   **Top Button (Typically GPIO 35 on M5StickC, or as assigned by you):**
     *   **Menus:** Navigate UP (select previous item).
     *   **Oscilloscope Screen:** Pause / Resume.
     *   **Safety Info Screen:** Scroll text UP.
+    *   **USB Warning Screen:** Select "Proceed" to continue to the oscilloscope.
 *   **Bottom Button (Typically GPIO 39 on M5StickC, or as assigned by you):**
     *   **Menus:** Navigate DOWN (select next item).
     *   **Safety Info Screen:** Scroll text DOWN.
 
 ## Changelog
 
+*   **v1.5 (2024-07-29):**
+    *   Implemented Adjustable Trigger Level (selectable percentages via settings).
+    *   Modified USB/Charging warning to be non-blocking with a 'Proceed' option and timeout.
+    *   Refined 'Measure Channel' selection logic in settings for better usability.
+    *   Internal refactoring of `oscilloscopeScreen` for improved code structure.
 *   **v1.4 (2025-11-5):**
     *   Added Enhanced Oscilloscope Pause: Instant waveform freeze, Vpp/Frequency display at pause.
     *   Updated charging advisory button text to "OK".
@@ -106,7 +114,6 @@ A JavaScript-based oscilloscope application specifically designed for M5Stack de
 
 *   AC/DC Coupling (would require hardware interface and software logic).
 *   More advanced trigger modes (Normal, Auto, Single).
-*   Adjustable trigger level.
 *   Saving/Loading settings (if Bruce provides a filesystem API).
 
 ## Contributing

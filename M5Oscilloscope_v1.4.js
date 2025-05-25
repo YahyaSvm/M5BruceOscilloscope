@@ -55,7 +55,10 @@ var timeBaseIndex = 3; var timeBase = timeBaseValues[timeBaseIndex];
 var voltsPerDivValues = [0.2,0.5,1.0,1.5,2.0,2.5,3.0];
 var voltsPerDivIndex = 2; var voltsPerDiv = voltsPerDivValues[voltsPerDivIndex];
 var activeChannel1 = true; var activeChannel2 = false;
-var measureChannel = 1; var triggerLevelAdc = ADC_MAX_VALUE/2;
+var measureChannel = 1; 
+var triggerLevelPercentages = [0.10, 0.25, 0.50, 0.75, 0.90];
+var triggerLevelIndex = 2; // Defaulting to 0.50 (50%)
+var triggerLevelAdc = Math.floor(ADC_MAX_VALUE * triggerLevelPercentages[triggerLevelIndex]);
 var triggerEdge = 1;
 
 
@@ -130,17 +133,41 @@ function drawScrollableMenuItem(text, index, selectedIndex, viewTopIndex, yOffse
     }
 }
 
-// === Original USB Warning Screen (Hard Stop) ===
-function showUsbWarningAndBlock() {
+// === USB Warning Screen (User Choice) ===
+function showUsbWarningScreen() { // Renamed
     var tempEnableBattery = ENABLE_BATTERY_HEURISTIC_DETECTION; ENABLE_BATTERY_HEURISTIC_DETECTION = false;
     drawFillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_BACKGROUND); drawHeader("WARNING");
     setTextSize(1); setTextColor(COLOR_WARNING_TEXT);
-    var warnings = [ "USB Power Detected!", "High voltage on CH1 pin.", "This can affect ADC readings.", "DISCONNECT USB CABLE", "for accurate measurements,", "or ensure CH1 has a load.", "", "Press Any Button to Return" ];
+    var warnings = [ "USB Power Detected!", "High voltage on CH1 pin.", "This can affect ADC readings.", "DISCONNECT USB CABLE", "for accurate measurements,", "or ensure CH1 has a load." ]; // Removed "Press Any Button"
     var yPos = HEADER_HEIGHT + 10; var lineHeight = 12;
     for (var i = 0; i < warnings.length; i++) { var line = warnings[i]; var lineWidth = line.length * CHAR_WIDTH_PX; drawString(line, Math.floor(SCREEN_WIDTH / 2 - lineWidth / 2), yPos + i * lineHeight); }
-    drawFooter("", "Any Button: Menu", "");
-    while (digitalRead(BTN_M5_SELECT_EXIT_PIN) && digitalRead(BTN_NAV_UP_PIN) && digitalRead(BTN_NAV_DOWN_PIN)) delay(50);
-    delay(200); ENABLE_BATTERY_HEURISTIC_DETECTION = tempEnableBattery; forceRedrawCurrentScreen = true;
+    
+    // New Footer: "Proceed" (Up) and "Menu" (Select/Exit)
+    drawFooter("Proceed", "Menu", ""); 
+
+    var startTime = Date.now();
+    var timeoutMs = 10000; // 10 seconds timeout
+
+    while (true) {
+        if (!digitalRead(BTN_NAV_UP_PIN)) { // Proceed
+            delay(200); // Debounce
+            ENABLE_BATTERY_HEURISTIC_DETECTION = tempEnableBattery;
+            forceRedrawCurrentScreen = true;
+            return true; // User chose to proceed
+        }
+        if (!digitalRead(BTN_M5_SELECT_EXIT_PIN)) { // Menu
+            delay(200); // Debounce
+            ENABLE_BATTERY_HEURISTIC_DETECTION = tempEnableBattery;
+            forceRedrawCurrentScreen = true;
+            return false; // User chose to return to menu
+        }
+        if (Date.now() - startTime > timeoutMs) { // Timeout
+            ENABLE_BATTERY_HEURISTIC_DETECTION = tempEnableBattery;
+            forceRedrawCurrentScreen = true;
+            return false; // Default to menu on timeout
+        }
+        delay(50); // Check buttons periodically
+    }
 }
 
 // === Charging Fluctuation Warning Screen (Soft Warning) ===
@@ -166,8 +193,22 @@ function settingsMenu() {
         { name: "V/Div", getVal: function(){return voltsPerDivValues[voltsPerDivIndex].toFixed(1)+"V";}, action: function(){voltsPerDivIndex=(voltsPerDivIndex+1)%voltsPerDivValues.length; voltsPerDiv=voltsPerDivValues[voltsPerDivIndex];}},
         { name: "CH1", getVal: function(){return activeChannel1?"On":"Off";}, action: function(){activeChannel1=!activeChannel1;}},
         { name: "CH2", getVal: function(){return activeChannel2?"On":"Off";}, action: function(){activeChannel2=!activeChannel2;}},
-        { name: "Meas.Ch", getVal: function(){return "CH"+measureChannel;}, action: function(){measureChannel=(measureChannel%2)+1; if(!activeChannel1 && !activeChannel2) measureChannel=1;}},
+        { name: "Meas.Ch", getVal: function(){return "CH"+measureChannel;}, action: function(){
+            if (activeChannel1 && activeChannel2) { // Both active, toggle
+                measureChannel = (measureChannel % 2) + 1;
+            } else if (activeChannel1) { // Only CH1 active
+                measureChannel = 1;
+            } else if (activeChannel2) { // Only CH2 active
+                measureChannel = 2;
+            } else { // Both inactive, default to CH1
+                measureChannel = 1;
+            }
+        }},
         { name: "TrigEdge", getVal: function(){return triggerEdge==1?"Rise":"Fall";}, action: function(){triggerEdge=1-triggerEdge;}},
+        { name: "Trig.Level", getVal: function(){return (triggerLevelPercentages[triggerLevelIndex] * 100).toFixed(0) + "%";}, action: function(){
+            triggerLevelIndex = (triggerLevelIndex + 1) % triggerLevelPercentages.length;
+            triggerLevelAdc = Math.floor(ADC_MAX_VALUE * triggerLevelPercentages[triggerLevelIndex]);
+        }},
         { name: "Back", getVal: function(){return "";}, action: "EXIT_MENU" }
     ];
     var redrawScreen = true;
@@ -379,16 +420,17 @@ function oscilloscopeScreen() {
             drawHeader("Oscilloscope");
         }
 
-        // --- Oscilloscope Data Acquisition and Drawing Logic (ONLY IF NOT PAUSED) ---
-        if (!isPaused) {
+        // --- Inner function for data acquisition and drawing ---
+        function _oscilloscopeUpdateAndDrawLoop() {
             var adcValCh1 = analogRead(CH1_PIN);
             var adcValCh2 = activeChannel2 ? analogRead(CH2_PIN) : initialAdcValue;
 
             if (adcValCh1 === null || isNaN(adcValCh1) || (activeChannel2 && (adcValCh2 === null || isNaN(adcValCh2)))) {
                 delay(timeBase > 0 ? timeBase : 1);
                 if (headerNeedsUpdate) drawHeader("Oscilloscope"); // Update header even during short delay
-                drawFooter("Pause", "Exit", ""); // Keep footer correct
-                continue;
+                // Footer is drawn outside this loop based on isPaused state, so no need to draw it here if we 'continue' equivalent.
+                // However, to prevent the rest of the function from running, we can return early.
+                return; 
             }
             var screenYCh1 = adcToScreenY(adcValCh1);
             var screenYCh2 = activeChannel2 ? adcToScreenY(adcValCh2) : adcToScreenY(initialAdcValue);
@@ -445,12 +487,14 @@ function oscilloscopeScreen() {
             currentX++;
 
             if (headerNeedsUpdate) drawHeader("Oscilloscope"); // Update header if battery changed during live sweep
-
+            
             delay(timeBase > 0 ? timeBase : 1);
         }
-        // --- END OF ADC and Drawing Logic if !isPaused ---
+        // --- END of inner function ---
 
-
+        if (!isPaused) {
+            _oscilloscopeUpdateAndDrawLoop();
+        }
         // --- Draw PAUSED message and Footer (Always, to reflect current state) ---
         if (isPaused) {
             var pauseMsgText = "PAUSED";
@@ -496,8 +540,16 @@ function main() {
         updateBatteryStateAndHandleAdvisory();
         var menuSelection = mainMenu();
         if (menuSelection == 0) { // Oscilloscope
-            if (ENABLE_USB_DETECTION && isUsbChargingDetected()) showUsbWarningAndBlock();
-            else { oscilloscopeScreen(); forceRedrawCurrentScreen = true; }
+            if (ENABLE_USB_DETECTION && isUsbChargingDetected()) {
+                if (showUsbWarningScreen()) { // Call new function and check return
+                    oscilloscopeScreen();
+                }
+                // If showUsbWarningScreen returns false, main loop continues, showing menu.
+                // forceRedrawCurrentScreen is set within showUsbWarningScreen
+            } else { 
+                oscilloscopeScreen(); 
+                forceRedrawCurrentScreen = true; // Ensure redraw if no warning
+            }
         } else if (menuSelection == 1) { settingsMenu(); forceRedrawCurrentScreen = true;
         } else if (menuSelection == 2) { aboutScreen(); forceRedrawCurrentScreen = true;
         } else if (menuSelection == 3) { safetyInfoScreen(); forceRedrawCurrentScreen = true;

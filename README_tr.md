@@ -1,8 +1,8 @@
-# M5BruceOsiloskop - v1.4
+# M5BruceOsiloskop - v1.5
 
 **Geliştirici:** YahyaSvm, takagi-1
 **Hedef Firmware:** [Bruce Firmware by pr3y](https://github.com/pr3y/Bruce)
-**Sürüm:** 1.4 (Yayın Tarihi: 2025-11-5)
+**Sürüm:** 1.5 (Yayın Tarihi: 2024-07-29)
 **Diller:** [English](./README.md) | [Türkçe](./README_tr.md)
 
 M5Stack cihazlarında **Bruce Firmware** çalıştıranlar için özel olarak tasarlanmış JavaScript tabanlı bir osiloskop uygulamasıdır. Bu proje, Bruce ortamının yeteneklerini kullanarak M5Stack üzerinde doğrudan işlevsel bir osiloskop deneyimi sunmayı amaçlamaktadır.
@@ -10,12 +10,13 @@ M5Stack cihazlarında **Bruce Firmware** çalıştıranlar için özel olarak ta
 ![M5BruceOsiloskop Ekran Görüntüsü](./assets/screenshot_scope.png)
 ![How to use Screenshot](./assets/M5stack.png)
 
-## Özellikler (v1.4)
+## Özellikler (v1.5)
 
 *   **Bruce Firmware** (pr3y tarafından) hedeflenmiştir.
 *   Çift Kanal Görüntüleme (CH2 varsayılanda devre dışı).
 *   Ayarlanabilir Zaman/Piksel (Yatay tarama hızı).
 *   Ayarlanabilir Volt/Kademe (Dikey hassasiyet).
+*   Ayarlanabilir Tetikleme Seviyesi (ayarlardan seçilebilir yüzdeler: %10, %25, %50, %75, %90).
 *   Seçili kanal için Vpp (Tepeden Tepeye) Ölçümü.
 *   Seçili kanal için Frekans Ölçümü (Temel).
 *   Seçilebilir Ölçüm Kanalı (CH1 veya CH2).
@@ -23,7 +24,7 @@ M5Stack cihazlarında **Bruce Firmware** çalıştıranlar için özel olarak ta
 *   Kaydırmalı Menü Arayüzü.
 *   Kaydırılabilir metin içeren Özel Güvenlik Bilgileri Ekranı.
 *   Yapılandırılabilir Buton Düzeni.
-*   Heuristik USB/Şarj Algılama ve Uyarı (Deneysel).
+*   Heuristik USB/Şarj Algılama ve Uyarı (Deneysel, artık engellemeyen, 'Devam Et' seçeneği ve zaman aşımı mevcut).
 *   **YENİ (v1.4): Gelişmiş Osiloskop Duraklatma (Pause):**
     *   "Pause" tuşuna basıldığında, ekrandaki mevcut dalga formu **anında dondurulur**.
     *   Duraklatma anındaki Vpp ve Frekans değerleri bilgi çubuğunda gösterilir.
@@ -63,10 +64,10 @@ M5Stack cihazlarında **Bruce Firmware** çalıştıranlar için özel olarak ta
 ## Kurulum ve Yapılandırma
 
 1.  **Bruce Firmware'i Yükleyin:** M5Stack cihazınıza [Bruce Firmware](https://github.com/pr3y/Bruce)'in yüklü olduğundan emin olun.
-2.  **Pinleri Yapılandırın:** `M5BruceOscilloscope_v1.4.js` (veya güncel sürüm) dosyasını açın ve dosyanın başındaki butonlarınız, ADC girişleriniz ve batarya pini (kullanılıyorsa) için **GPIO pin numaralarını**, Bruce Firmware'in özel M5Stack modelinizde bunları nasıl tanıdığına göre **dikkatlice ayarlayın**.
+2.  **Pinleri Yapılandırın:** `M5BruceOscilloscope_v1.5.js` (veya güncel sürüm) dosyasını açın ve dosyanın başındaki butonlarınız, ADC girişleriniz ve batarya pini (kullanılıyorsa) için **GPIO pin numaralarını**, Bruce Firmware'in özel M5Stack modelinizde bunları nasıl tanıdığına göre **dikkatlice ayarlayın**.
 3.  **Karakter Genişliği:** Bruce Firmware'in yazı tipiyle cihazınızın ekranında metin hizalaması bozuksa, script'teki `CHAR_WIDTH_PX` (varsayılan: `6`) değerini ayarlayın.
 4.  **Script'i Yükleyin:**
-    *   `M5BruceOscilloscope_v1.4.js` dosyasını M5Stack'inize aktarın (örn. Bruce destekliyorsa SD kart aracılığıyla veya Bruce'un REPL/IDE'sine yapıştırarak).
+    *   `M5BruceOscilloscope_v1.5.js` dosyasını M5Stack'inize aktarın (örn. Bruce destekliyorsa SD kart aracılığıyla veya Bruce'un REPL/IDE'sine yapıştırarak).
     *   Script'i Bruce Firmware ortamında çalıştırın.
 
 ## Kullanım (Buton Düzeni)
@@ -74,17 +75,24 @@ M5Stack cihazlarında **Bruce Firmware** çalıştıranlar için özel olarak ta
 *   **M5 Butonu (Ön/Yan - Genellikle GPIO 37):**
     *   **Menüler:** Vurgulanan öğeyi seçin.
     *   **Ayarlar Menüsü:** Seçili ayarın değerini değiştirin / Ayarlardan çıkmak için "Back" öğesini seçin.
-    *   **Osiloskop/Hakkında/Güvenlik Ekranları/USB Uyarı Ekranı:** Önceki menüye çıkın. (USB Uyarı ekranında herhangi bir tuşa basmak çıkarır).
+    *   **Osiloskop/Hakkında/Güvenlik Ekranları:** Önceki menüye çıkın.
+    *   **USB Uyarı Ekranı:** Ana menüye dönmek için "Menü"yü seçin.
 *   **Üst Buton (Genellikle GPIO 35 M5StickC'de, veya sizin atadığınız):**
     *   **Menüler:** YUKARI gidin (önceki öğeyi seçin).
     *   **Osiloskop Ekranı:** Pause (Duraklat) / Resume (Devam Et).
     *   **Güvenlik Bilgisi Ekranı:** Metni YUKARI kaydırın.
+    *   **USB Uyarı Ekranı:** Osiloskopa devam etmek için "Devam Et"i seçin.
 *   **Alt Buton (Genellikle GPIO 39 M5StickC'de, veya sizin atadığınız):**
     *   **Menüler:** AŞAĞI gidin (sonraki öğeyi seçin).
     *   **Güvenlik Bilgisi Ekranı:** Metni AŞAĞI kaydırın.
 
 ## Değişiklik Kaydı
 
+*   **v1.5 (2024-07-29):**
+    *   Ayarlanabilir Tetikleme Seviyesi eklendi (ayarlar üzerinden yüzdesel seçimle).
+    *   USB/Şarj uyarısı, 'Devam Et' seçeneği ve zaman aşımı ile engellemeyen şekilde düzenlendi.
+    *   Ayarlardaki 'Ölçüm Kanalı' seçim mantığı daha iyi kullanılabilirlik için iyileştirildi.
+    *   Kod yapısını iyileştirmek için `oscilloscopeScreen` fonksiyonunda dahili yeniden düzenleme yapıldı.
 *   **v1.4 (2025-11-5):**
     *   Gelişmiş Osiloskop Duraklatma (Pause) işlevi eklendi: Anlık dalga formu dondurma, duraklatma anındaki Vpp/Frekans gösterimi.
     *   Şarj uyarısı buton metni "OK" olarak güncellendi.
@@ -106,7 +114,6 @@ M5Stack cihazlarında **Bruce Firmware** çalıştıranlar için özel olarak ta
 
 *   AC/DC Kuplajı (donanım arayüzü ve yazılım mantığı gerektirir).
 *   Daha gelişmiş tetikleme modları (Normal, Otomatik, Tek).
-*   Ayarlanabilir tetikleme seviyesi.
 *   Ayarları kaydetme/yükleme (Bruce bir dosya sistemi API'si sağlıyorsa).
 
 ## Katkıda Bulunma
