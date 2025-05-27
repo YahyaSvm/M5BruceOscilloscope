@@ -1,6 +1,6 @@
 var SCREEN_WIDTH = width();
 var SCREEN_HEIGHT = height();
-var APP_VERSION = "v1.4"; 
+var APP_VERSION = "v1.5"; // Version updated: Button system change
 
 var ADC_REF_VOLTAGE = 3.3;
 var ADC_MAX_VALUE = 4095;
@@ -8,10 +8,10 @@ var NUM_VERT_DIVS = 6;
 var NUM_HORZ_DIVS = 8;
 var CHAR_WIDTH_PX = 6;
 
-// === M5STACK BUTTON PINS ===
-var BTN_M5_SELECT_EXIT_PIN = 37;
-var BTN_NAV_UP_PIN = 35;
-var BTN_NAV_DOWN_PIN = 39;
+// === M5STACK BUTTON PINS (No longer used directly, Bruce OS functions will be used) ===
+// var BTN_M5_SELECT_EXIT_PIN = 37; // Corresponds to getSelPress()
+// var BTN_NAV_UP_PIN = 35; // Corresponds to getPrevPress() (Power Button)
+// var BTN_NAV_DOWN_PIN = 39; // Corresponds to getNextPress() (Button A)
 
 // ADC Input Pins
 var CH1_PIN = 36;
@@ -135,12 +135,19 @@ function showUsbWarningAndBlock() {
     var tempEnableBattery = ENABLE_BATTERY_HEURISTIC_DETECTION; ENABLE_BATTERY_HEURISTIC_DETECTION = false;
     drawFillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_BACKGROUND); drawHeader("WARNING");
     setTextSize(1); setTextColor(COLOR_WARNING_TEXT);
-    var warnings = [ "USB Power Detected!", "High voltage on CH1 pin.", "This can affect ADC readings.", "DISCONNECT USB CABLE", "for accurate measurements,", "or ensure CH1 has a load.", "", "Press Any Button to Return" ];
+    var warnings = [ "USB Power Detected!", "High voltage on CH1 pin.", "This can affect ADC readings.", "DISCONNECT USB CABLE", "for accurate measurements,", "or ensure CH1 has a load.", "", "Press Select to Continue" ]; // Text updated
     var yPos = HEADER_HEIGHT + 10; var lineHeight = 12;
     for (var i = 0; i < warnings.length; i++) { var line = warnings[i]; var lineWidth = line.length * CHAR_WIDTH_PX; drawString(line, Math.floor(SCREEN_WIDTH / 2 - lineWidth / 2), yPos + i * lineHeight); }
-    drawFooter("", "Any Button: Menu", "");
-    while (digitalRead(BTN_M5_SELECT_EXIT_PIN) && digitalRead(BTN_NAV_UP_PIN) && digitalRead(BTN_NAV_DOWN_PIN)) delay(50);
-    delay(200); ENABLE_BATTERY_HEURISTIC_DETECTION = tempEnableBattery; forceRedrawCurrentScreen = true;
+    drawFooter("", "Select: Continue", ""); // Footer updated
+
+    while (true) { // Loop until Select is pressed
+        if (getSelPress()) {
+            break; // Exit loop when Select is pressed
+        }
+        delay(50); // Check periodically
+    }
+    // getSelPress() handles debounce, so no extra delay needed here for that.
+    ENABLE_BATTERY_HEURISTIC_DETECTION = tempEnableBattery; forceRedrawCurrentScreen = true;
 }
 
 // === Charging Fluctuation Warning Screen (Soft Warning) ===
@@ -152,9 +159,15 @@ function showChargingFluctuationWarning() {
     var warnings = [ "Device appears to be charging.", "(Battery voltage rising)", "Measurements may fluctuate", "or be less accurate.", "" ];
     var yPos = HEADER_HEIGHT + 15; var lineHeight = 12;
     for (var i = 0; i < warnings.length; i++) { var line = warnings[i]; var lineWidth = line.length * CHAR_WIDTH_PX; drawString(line, Math.floor(SCREEN_WIDTH / 2 - lineWidth / 2), yPos + i * lineHeight); }
-    drawFooter("", "OK", ""); // MODIFIED: "Kapat" removed
-    while (digitalRead(BTN_M5_SELECT_EXIT_PIN)) delay(50);
-    delay(200); ENABLE_BATTERY_HEURISTIC_DETECTION = tempEnableBattery; lastBatteryCheckTimeMs = tempLastCheckTime;
+    drawFooter("", "OK (Select)", ""); // Footer updated
+
+    while (true) { // Loop until Select is pressed
+        if (getSelPress()) {
+            break; // Exit loop when Select is pressed
+        }
+        delay(50); // Check periodically
+    }
+    ENABLE_BATTERY_HEURISTIC_DETECTION = tempEnableBattery; lastBatteryCheckTimeMs = tempLastCheckTime;
 }
 
 // === Settings Menu ===
@@ -179,29 +192,35 @@ function settingsMenu() {
                 var itemText = menuStructure[i].name; var valueText = menuStructure[i].getVal(); if (valueText) itemText += ": " + valueText;
                 if (itemText.length*CHAR_WIDTH_PX > SCREEN_WIDTH-25) itemText = itemText.substring(0, Math.floor((SCREEN_WIDTH-25)/CHAR_WIDTH_PX)-1) + "..";
                 drawScrollableMenuItem(itemText, i, selectedIndex, viewTopIndex, menuDisplayAreaY, menuItemHeight, menuDisplayAreaHeight);
-            } drawFooter("Up", "Select/Do", "Down"); redrawScreen = false;
+            } drawFooter("Up (Pwr)", "Select/Do", "Down (A)"); redrawScreen = false; // Footer hints updated
         }
-        delay(70);
-        if (!digitalRead(BTN_M5_SELECT_EXIT_PIN)) {
-            var currentItem = menuStructure[selectedIndex]; if (currentItem.action === "EXIT_MENU") { delay(200); return; }
+        // No main loop delay needed here, button checks are event-driven by get...Press()
+
+        if (getSelPress()) { // BTN_M5_SELECT_EXIT_PIN (GPIO37)
+            var currentItem = menuStructure[selectedIndex]; 
+            if (currentItem.action === "EXIT_MENU") { return; } // Exit immediately
             else if (typeof currentItem.action === 'function') {
                 currentItem.action();
                 if ((currentItem.name === "CH1" || currentItem.name === "CH2") && measureChannel === 1 && !activeChannel1 && activeChannel2) measureChannel = 2;
                 else if ((currentItem.name === "CH1" || currentItem.name === "CH2") && measureChannel === 2 && !activeChannel2 && activeChannel1) measureChannel = 1;
                 else if (!activeChannel1 && !activeChannel2) measureChannel = 1;
                 redrawScreen = true;
-            } delay(200);
+            }
+            // getSelPress() handles debounce and single trigger
         }
-        if (!digitalRead(BTN_NAV_UP_PIN)) {
+        if (getPrevPress()) { // BTN_NAV_UP_PIN (Power Button - GPIO35)
             selectedIndex = (selectedIndex - 1 + menuStructure.length) % menuStructure.length;
-            if (selectedIndex < viewTopIndex) viewTopIndex = selectedIndex; else if (selectedIndex >= viewTopIndex + maxVisibleItems) viewTopIndex = selectedIndex - maxVisibleItems + 1;
-            redrawScreen = true; delay(180);
+            if (selectedIndex < viewTopIndex) viewTopIndex = selectedIndex; 
+            else if (selectedIndex >= viewTopIndex + maxVisibleItems) viewTopIndex = selectedIndex - maxVisibleItems + 1;
+            redrawScreen = true; 
         }
-        if (!digitalRead(BTN_NAV_DOWN_PIN)) {
+        if (getNextPress()) { // BTN_NAV_DOWN_PIN (Button A - GPIO39)
             selectedIndex = (selectedIndex + 1) % menuStructure.length;
-            if (selectedIndex >= viewTopIndex + maxVisibleItems) viewTopIndex = selectedIndex - maxVisibleItems + 1; else if (selectedIndex < viewTopIndex) viewTopIndex = selectedIndex;
-            redrawScreen = true; delay(180);
+            if (selectedIndex >= viewTopIndex + maxVisibleItems) viewTopIndex = selectedIndex - maxVisibleItems + 1; 
+            else if (selectedIndex < viewTopIndex) viewTopIndex = selectedIndex;
+            redrawScreen = true; 
         }
+        delay(50); // Add a small delay to prevent tight loop if no buttons pressed, and allow screen updates
     }
 }
 
@@ -217,20 +236,25 @@ function mainMenu() {
             for (var i=0; i<menuItems.length; i++) {
                 var itemText = menuItems[i]; if (itemText.length*CHAR_WIDTH_PX > SCREEN_WIDTH-25) itemText = itemText.substring(0, Math.floor((SCREEN_WIDTH-25)/CHAR_WIDTH_PX)-1) + "..";
                 drawScrollableMenuItem(itemText, i, selectedIndex, viewTopIndex, menuDisplayAreaY, menuItemHeight, menuDisplayAreaHeight);
-            } drawFooter("Up", "Select", "Down"); redrawScreen = false;
+            } drawFooter("Up (Pwr)", "Select", "Down (A)"); redrawScreen = false; // Footer hints updated
         }
-        delay(70);
-        if (!digitalRead(BTN_NAV_UP_PIN)) {
+
+        if (getPrevPress()) { // Up
             selectedIndex = (selectedIndex - 1 + menuItems.length) % menuItems.length;
-            if (selectedIndex < viewTopIndex) viewTopIndex = selectedIndex; else if (selectedIndex >= viewTopIndex + maxVisibleItems) viewTopIndex = selectedIndex - maxVisibleItems + 1;
-            redrawScreen = true; delay(180);
+            if (selectedIndex < viewTopIndex) viewTopIndex = selectedIndex; 
+            else if (selectedIndex >= viewTopIndex + maxVisibleItems) viewTopIndex = selectedIndex - maxVisibleItems + 1;
+            redrawScreen = true; 
         }
-        if (!digitalRead(BTN_NAV_DOWN_PIN)) {
+        if (getNextPress()) { // Down
             selectedIndex = (selectedIndex + 1) % menuItems.length;
-            if (selectedIndex >= viewTopIndex + maxVisibleItems) viewTopIndex = selectedIndex - maxVisibleItems + 1; else if (selectedIndex < viewTopIndex) viewTopIndex = selectedIndex;
-            redrawScreen = true; delay(180);
+            if (selectedIndex >= viewTopIndex + maxVisibleItems) viewTopIndex = selectedIndex - maxVisibleItems + 1; 
+            else if (selectedIndex < viewTopIndex) viewTopIndex = selectedIndex;
+            redrawScreen = true; 
         }
-        if (!digitalRead(BTN_M5_SELECT_EXIT_PIN)) { delay(250); return selectedIndex; }
+        if (getSelPress()) { // Select
+            return selectedIndex; 
+        }
+        delay(50); // Add a small delay
     }
 }
 
@@ -247,9 +271,10 @@ function aboutScreen() {
             for(var i=0; i<textLines.length; i++) {
                 var line = textLines[i]; if (line.length*CHAR_WIDTH_PX > SCREEN_WIDTH-10) line = line.substring(0, Math.floor((SCREEN_WIDTH-10)/CHAR_WIDTH_PX)-1) + "..";
                 var lineWidth = line.length * CHAR_WIDTH_PX; drawString(line, Math.floor(SCREEN_WIDTH/2 - lineWidth/2), yPos + i*lineHeight);
-            } drawFooter("", "Back", ""); redrawScreen = false;
+            } drawFooter("", "Back (Sel)", ""); redrawScreen = false; // Footer hints updated
         }
-        if (!digitalRead(BTN_M5_SELECT_EXIT_PIN)) { delay(200); return; } delay(70);
+        if (getSelPress()) { return; } 
+        delay(50); // Add a small delay
     }
 }
 
@@ -270,18 +295,19 @@ function safetyInfoScreen() {
                     drawFillRect(0, displayY, SCREEN_WIDTH, lineHeight, COLOR_BACKGROUND);
                     var line = warnings[i]; var lineWidth = line.length * CHAR_WIDTH_PX; drawString(line, Math.floor(SCREEN_WIDTH/2 - lineWidth/2), displayY);
                 }
-            } setTextColor(COLOR_FOREGROUND); drawFooter("Up", "Back", "Down"); redrawScreen = false;
+            } setTextColor(COLOR_FOREGROUND); drawFooter("Up (Pwr)", "Back (Sel)", "Down (A)"); redrawScreen = false; // Footer hints updated
         }
-        delay(70);
-        if (!digitalRead(BTN_M5_SELECT_EXIT_PIN)) { delay(200); return; }
-        if (!digitalRead(BTN_NAV_UP_PIN)) {
+        
+        if (getSelPress()) { return; }
+        if (getPrevPress()) { // Up
             var prevViewTopLine = viewTopLine; if (viewTopLine > 0) viewTopLine--;
-            if (viewTopLine !== prevViewTopLine) redrawScreen = true; delay(150);
+            if (viewTopLine !== prevViewTopLine) redrawScreen = true; 
         }
-        if (!digitalRead(BTN_NAV_DOWN_PIN)) {
+        if (getNextPress()) { // Down
             var prevViewTopLine = viewTopLine; if (viewTopLine < warnings.length - maxVisibleLines) viewTopLine++;
-            if (viewTopLine !== prevViewTopLine) redrawScreen = true; delay(150);
+            if (viewTopLine !== prevViewTopLine) redrawScreen = true; 
         }
+        delay(50); // Add a small delay
     }
 }
 
@@ -295,22 +321,19 @@ function oscilloscopeScreen() {
     var lastTriggerStateAdc, readyForNextTrigger, triggeredThisSweep;
     var isPaused = false;
     var initialAdcValue = ADC_MAX_VALUE/2;
-    var needsFullRedraw = true; // For initial draw, and unpausing
+    var needsFullRedraw = true; 
 
-    // Function to reset sweep-specific variables
-    function resetSweepState() {
+    function resetSweepState() { /* ... (no changes needed here) ... */ 
         prevY1 = adcToScreenY(initialAdcValue);
         prevY2 = adcToScreenY(initialAdcValue);
         currentX = graphOriginX;
         minAdcValue = ADC_MAX_VALUE; maxAdcValue = 0;
-        // measuredFreq = 0; // Keep last measured frequency for continuity unless sweep completes without trigger
         samplesSinceTrigger = 0;
         lastTriggerStateAdc = triggerLevelAdc;
         readyForNextTrigger = true;
         triggeredThisSweep = false;
     }
-
-    function adcToScreenY(adcValue){
+    function adcToScreenY(adcValue){ /* ... (no changes needed here) ... */ 
         adcValue = Math.max(0, Math.min(ADC_MAX_VALUE, adcValue)); var voltage = (adcValue / ADC_MAX_VALUE) * ADC_REF_VOLTAGE;
         var voltageRelativeToCenter = voltage - (ADC_REF_VOLTAGE / 2); var totalVoltsOnScreen = voltsPerDiv * NUM_VERT_DIVS;
         var pixelsPerVolt = graphRenderHeight / totalVoltsOnScreen; var yOnGraph = (graphRenderHeight / 2) - (voltageRelativeToCenter * pixelsPerVolt);
@@ -318,13 +341,13 @@ function oscilloscopeScreen() {
         if(finalScreenY < graphAreaY) finalScreenY = graphAreaY; if(finalScreenY >= graphAreaY + graphRenderHeight - 1) finalScreenY = graphAreaY + graphRenderHeight - 1;
         return Math.floor(finalScreenY);
     }
-    function drawScopeGrid(){
+    function drawScopeGrid(){ /* ... (no changes needed here) ... */ 
         drawFillRect(graphOriginX,graphAreaY,graphRenderWidth,graphRenderHeight,COLOR_BACKGROUND);
         var horzDivPixelWidth = graphRenderWidth / NUM_HORZ_DIVS; var vertDivPixelHeight = graphRenderHeight / NUM_VERT_DIVS;
         for(var i = 0; i <= NUM_HORZ_DIVS; i++){ var lineX = graphOriginX + Math.floor(i * horzDivPixelWidth); drawLine(lineX, graphAreaY, lineX, graphAreaY + graphRenderHeight, (i === NUM_HORZ_DIVS/2) ? COLOR_GRID_LIGHT : COLOR_GRID_DARK); }
         for(var j = 0; j <= NUM_VERT_DIVS; j++){ var lineY = graphAreaY + Math.floor(j * vertDivPixelHeight); drawLine(graphOriginX, lineY, graphOriginX + graphRenderWidth, lineY, (j === NUM_VERT_DIVS/2) ? COLOR_GRID_LIGHT : COLOR_GRID_DARK); }
     }
-    function printScopeInfo(){
+    function printScopeInfo(){ /* ... (no changes needed here) ... */ 
         drawFillRect(0,HEADER_HEIGHT,SCREEN_WIDTH,INFO_BAR_HEIGHT,color(15,15,15)); setTextSize(1); setTextColor(COLOR_FOREGROUND);
         var infoY = HEADER_HEIGHT + 3; var vppVolts = ((maxAdcValue - minAdcValue) / ADC_MAX_VALUE) * ADC_REF_VOLTAGE;
         if (vppVolts < 0.005 || maxAdcValue === 0 || minAdcValue === ADC_MAX_VALUE || (!activeChannel1 && !activeChannel2)) vppVolts = 0;
@@ -349,20 +372,15 @@ function oscilloscopeScreen() {
             forceRedrawCurrentScreen = false;
         }
 
-        // Handle Pause/Resume button
-        if (!digitalRead(BTN_NAV_UP_PIN)) {
-            delay(150);
-            if (!digitalRead(BTN_NAV_UP_PIN)) {
-                isPaused = !isPaused;
-                if (!isPaused) { // Just UNPAUSED
-                    needsFullRedraw = true;
-                } else { // Just PAUSED
-                    // Update header and info bar to reflect the state AT THE MOMENT OF PAUSE
-                    // The trace is already on screen from the last ADC read cycle.
-                    drawHeader("Oscilloscope");
-                    printScopeInfo(); // This shows Vpp/Hz of the trace that was just captured and frozen
-                }
-                delay(200);
+        // Handle Pause/Resume button (PrevPress - Power Button)
+        // Note: Power button might have system-level functions too. Test carefully.
+        if (getPrevPress()) { 
+            isPaused = !isPaused;
+            if (!isPaused) { // Just UNPAUSED
+                needsFullRedraw = true;
+            } else { // Just PAUSED
+                drawHeader("Oscilloscope");
+                printScopeInfo(); 
             }
         }
 
@@ -370,38 +388,34 @@ function oscilloscopeScreen() {
             drawFillRect(0,0,SCREEN_WIDTH,SCREEN_HEIGHT,COLOR_BACKGROUND);
             drawHeader("Oscilloscope");
             drawScopeGrid();
-            resetSweepState(); // Reset variables for the new sweep
-            printScopeInfo();  // Print initial/reset info
+            resetSweepState(); 
+            printScopeInfo();  
             needsFullRedraw = false;
         } else if (isPaused && headerNeedsUpdate) {
-            // If paused and only header (battery) changed, redraw header.
-            // PAUSED message and footer will be redrawn below.
             drawHeader("Oscilloscope");
         }
 
-        // --- Oscilloscope Data Acquisition and Drawing Logic (ONLY IF NOT PAUSED) ---
         if (!isPaused) {
             var adcValCh1 = analogRead(CH1_PIN);
             var adcValCh2 = activeChannel2 ? analogRead(CH2_PIN) : initialAdcValue;
 
             if (adcValCh1 === null || isNaN(adcValCh1) || (activeChannel2 && (adcValCh2 === null || isNaN(adcValCh2)))) {
                 delay(timeBase > 0 ? timeBase : 1);
-                if (headerNeedsUpdate) drawHeader("Oscilloscope"); // Update header even during short delay
-                drawFooter("Pause", "Exit", ""); // Keep footer correct
+                if (headerNeedsUpdate) drawHeader("Oscilloscope"); 
+                drawFooter("Pause(Pwr)", "Exit(Sel)", ""); // Footer hints updated
                 continue;
             }
             var screenYCh1 = adcToScreenY(adcValCh1);
             var screenYCh2 = activeChannel2 ? adcToScreenY(adcValCh2) : adcToScreenY(initialAdcValue);
 
-            if(currentX >= graphOriginX + graphRenderWidth) { // Sweep finished
+            if(currentX >= graphOriginX + graphRenderWidth) { 
                 currentX = graphOriginX;
-                drawScopeGrid(); // Clear old trace from graph area only
-                // Vpp/Freq for the *completed* sweep are in min/maxAdcValue and measuredFreq
-                printScopeInfo(); // Update display with final values of the completed sweep
-                minAdcValue = ADC_MAX_VALUE; maxAdcValue = 0; // Reset for new sweep
-                if(!triggeredThisSweep && measuredFreq > 0) measuredFreq = 0; // Reset freq if no trigger
+                drawScopeGrid(); 
+                printScopeInfo(); 
+                minAdcValue = ADC_MAX_VALUE; maxAdcValue = 0; 
+                if(!triggeredThisSweep && measuredFreq > 0) measuredFreq = 0; 
                 triggeredThisSweep = false; readyForNextTrigger = true;
-                prevY1 = screenYCh1; // Start new sweep smoothly
+                prevY1 = screenYCh1; 
                 prevY2 = screenYCh2;
             }
 
@@ -444,43 +458,50 @@ function oscilloscopeScreen() {
             if(samplesSinceTrigger < (SCREEN_WIDTH * 100)) samplesSinceTrigger++;
             currentX++;
 
-            if (headerNeedsUpdate) drawHeader("Oscilloscope"); // Update header if battery changed during live sweep
-
+            if (headerNeedsUpdate) drawHeader("Oscilloscope"); 
             delay(timeBase > 0 ? timeBase : 1);
         }
-        // --- END OF ADC and Drawing Logic if !isPaused ---
-
-
-        // --- Draw PAUSED message and Footer (Always, to reflect current state) ---
+        
         if (isPaused) {
             var pauseMsgText = "PAUSED";
             var pauseMsgWidth = pauseMsgText.length * CHAR_WIDTH_PX;
-            var pauseMsgHeight = 10; // Approx height for text
+            var pauseMsgHeight = 10; 
             var pauseMsgX = Math.floor(SCREEN_WIDTH/2 - pauseMsgWidth/2);
-            var pauseMsgY = graphAreaY + Math.floor(graphRenderHeight / 2) - (pauseMsgHeight / 2); // Center on graph
+            var pauseMsgY = graphAreaY + Math.floor(graphRenderHeight / 2) - (pauseMsgHeight / 2); 
 
-            // Draw a small background for the "PAUSED" text for readability
             drawFillRect(pauseMsgX - 3, pauseMsgY - 2, pauseMsgWidth + 6, pauseMsgHeight + 4, COLOR_BACKGROUND);
             setTextSize(1); setTextColor(COLOR_PAUSED_TEXT);
             drawString(pauseMsgText, pauseMsgX, pauseMsgY);
-            drawFooter("Resume", "Exit", "");
+            drawFooter("Resume(Pwr)", "Exit(Sel)", ""); // Footer hints updated
         } else {
-            drawFooter("Pause", "Exit", "");
+            drawFooter("Pause(Pwr)", "Exit(Sel)", ""); // Footer hints updated
         }
 
-        if (!digitalRead(BTN_M5_SELECT_EXIT_PIN)) { delay(200); return; }
+        if (getSelPress()) { return; } // Exit Oscilloscope screen
 
         if (isPaused) {
-            delay(50); // Lower CPU usage while paused but keep responsive
+            delay(50); 
         }
         // If not paused, delay is handled by timeBase inside the ADC loop.
+        // If not drawing ADC, add small delay for button responsiveness if needed
+        if (isPaused && !getSelPress() && !getPrevPress()) { 
+            delay(20); // Small delay to keep UI responsive while paused and no buttons are pressed
+        } else if (!isPaused) {
+            // ADC loop has its own delay via timeBase
+        } else { // Paused, but a button might have been processed, loop again quickly
+            delay(1);
+        }
+
     }
 }
 
 
 // === Program Entry Point ===
 function main() {
-    pinMode(BTN_M5_SELECT_EXIT_PIN, INPUT_PULLUP); pinMode(BTN_NAV_UP_PIN, INPUT_PULLUP); pinMode(BTN_NAV_DOWN_PIN, INPUT_PULLUP);
+    // pinMode for buttons are no longer needed as getPrevPress etc handle this.
+    // pinMode(BTN_M5_SELECT_EXIT_PIN, INPUT_PULLUP); 
+    // pinMode(BTN_NAV_UP_PIN, INPUT_PULLUP); 
+    // pinMode(BTN_NAV_DOWN_PIN, INPUT_PULLUP);
     if (ENABLE_BATTERY_HEURISTIC_DETECTION && BATTERY_ADC_PIN >= 0) pinMode(BATTERY_ADC_PIN, INPUT);
 
     drawFillRect(0,0,SCREEN_WIDTH,SCREEN_HEIGHT,COLOR_BACKGROUND); setTextSize(1);
@@ -495,13 +516,13 @@ function main() {
     while (true) {
         updateBatteryStateAndHandleAdvisory();
         var menuSelection = mainMenu();
-        if (menuSelection == 0) { // Oscilloscope
+        if (menuSelection == 0) { 
             if (ENABLE_USB_DETECTION && isUsbChargingDetected()) showUsbWarningAndBlock();
             else { oscilloscopeScreen(); forceRedrawCurrentScreen = true; }
         } else if (menuSelection == 1) { settingsMenu(); forceRedrawCurrentScreen = true;
         } else if (menuSelection == 2) { aboutScreen(); forceRedrawCurrentScreen = true;
         } else if (menuSelection == 3) { safetyInfoScreen(); forceRedrawCurrentScreen = true;
-        } else if (menuSelection == 4) { // Exit to Bruce
+        } else if (menuSelection == 4) { 
             drawFillRect(0,0,SCREEN_WIDTH,SCREEN_HEIGHT,COLOR_BACKGROUND); updateBatteryStateAndHandleAdvisory(); drawHeader("Exiting to Bruce");
             setTextSize(1); setTextColor(COLOR_FOREGROUND); var msg1 = "Returning to Bruce OS...";
             drawString(msg1, Math.floor(SCREEN_WIDTH/2-(msg1.length*CHAR_WIDTH_PX)/2), SCREEN_HEIGHT/2 - 5);
